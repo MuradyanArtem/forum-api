@@ -1,13 +1,13 @@
-module apiserver
+module forum-api
 
 go 1.15
 
 require (
-	github.com/BurntSushi/toml v0.3.1
-	github.com/gopherschool/http-rest-api v0.0.0-20190922093049-d59926c5ce3c
 	github.com/gorilla/mux v1.8.0
-	github.com/gorilla/sessions v1.2.1
-	github.com/lib/pq v1.8.0
-	github.com/sirupsen/logrus v1.7.0
-	gopkg.in/yaml.v2 v2.3.0
+	github.com/jackc/pgtype v1.6.2
+	github.com/jackc/pgx v3.6.2+incompatible
+	github.com/mailru/easyjson v0.7.6
+	github.com/pkg/errors v0.8.1
+	github.com/sirupsen/logrus v1.4.2
+	github.com/spf13/pflag v1.0.5
 )

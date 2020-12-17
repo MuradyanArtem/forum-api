@@ -1,0 +1,35 @@
+version: '3.9'
+services:
+  api:
+    build:
+      context: ../
+      dockerfile: build/api.Dockerfile
+    image: forum-api
+    ports:
+      - 127.0.0.1:8080:8000
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: forum
+      DB_USER: forum
+      DB_PASSWORD: password
+    restart: on-failure
+    depends_on:
+      - db
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  db:
+    build:
+      context: ../
+      dockerfile: build/postgres.Dockerfile
+    image: forum-db
+    environment:
+      BACKUP: /dump.sql
+      POSTGRES_DB: forum
+      POSTGRES_USER: forum
+      POSTGRES_PASSWORD: password
