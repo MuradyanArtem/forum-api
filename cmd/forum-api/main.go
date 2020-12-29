@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 	"forum-api/internal/app"
-	"forum-api/internal/pkg/infrastructure/persistence"
-	"forum-api/internal/pkg/infrastructure/utils"
+	"forum-api/internal/infrastructure"
+	"forum-api/internal/infrastructure/persistence"
+	"forum-api/internal/interfaces/http"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
+
+const TIMEOUT = 3
 
 func main() {
 	var srvPort string
@@ -32,7 +35,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := utils.ConfigureLogger(os.Stdout, logLevel); err != nil {
+	if err := infrastructure.ConfigureLogger(os.Stdout, logLevel); err != nil {
 		log.Fatalln(err, "Cannot initialise logger")
 	}
 
@@ -73,14 +76,14 @@ func main() {
 	}
 
 	appRepo, err := persistence.New(&persistence.DBConfig{
-		Host: bdHost,
-		Port: bdPort,
-		Database: bdName,
-		User:     bdUser,
-		Password: bdPassword,
+		Host:                 bdHost,
+		Port:                 bdPort,
+		Database:             bdName,
+		User:                 bdUser,
+		Password:             bdPassword,
 		PreferSimpleProtocol: false,
-		AcquireTimeout: 0,
-		MaxConnections: 100,
+		AcquireTimeout:       0,
+		MaxConnections:       100,
 	})
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
@@ -89,7 +92,7 @@ func main() {
 		}).Fatalln("Cannot initialise DB", err)
 	}
 
-	app, err := app.New(appRepo)
+	app := app.New(appRepo)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "main",
@@ -100,8 +103,8 @@ func main() {
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%s:%s", srvHost, srvPort),
 		Handler:      router.New(app),
-		WriteTimeout: time.Duration(3) * time.Second,
-		ReadTimeout:  time.Duration(3) * time.Second,
+		WriteTimeout: time.Duration(TIMEOUT) * time.Second,
+		ReadTimeout:  time.Duration(TIMEOUT) * time.Second,
 	}
 
 	if err := server.ListenAndServe(); err != nil {

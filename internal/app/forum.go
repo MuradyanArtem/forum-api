@@ -1,9 +1,9 @@
 package app
 
 import (
-	"forum-api/internal/pkg/domain/models"
-	"forum-api/internal/pkg/domain/repository"
-	"forum-api/internal/pkg/infrastructure/utils"
+	"forum-api/internal/domain/models"
+	"forum-api/internal/domain/repository"
+	"forum-api/internal/infrastructure"
 
 	"github.com/pkg/errors"
 )
@@ -13,45 +13,45 @@ type Forum struct {
 	user  repository.User
 }
 
-func NewForum(forum repository.Forum, user repository.User) *ForumApp {
-	return &ForumApp{
+func newForum(forum repository.Forum, user repository.User) *Forum {
+	return &Forum{
 		forum,
 		user,
 	}
 }
 
-func (f *Forum) Create(forum *models.Forum) error {
+func (f *Forum) CreateForum(forum *models.Forum) error {
 	user := &models.User{}
 	user.Nickname = forum.User
 
 	if err := f.user.GetByNickname(user); err != nil {
-		return errors.Wrap(err, utils.UserNotExist)
+		return errors.Wrap(err, infrastructure.UserNotExist.Error())
 	}
 
 	forum.User = user.Nickname
 
-	if err = f.forum.GetBySlug(forum); err == nil {
-		return errors.Wrap(err, utils.ForumExist)
+	if err := f.forum.GetBySlug(forum); err == nil {
+		return errors.Wrap(err, infrastructure.ForumExist.Error())
 	}
 
-	if err = f.forumRepo.InsertInto(forum); err != nil {
+	if err := f.forum.InsertInto(forum); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (f *ForumApp) GetForum(forum *entity.Forum) error {
+func (f *Forum) GetForum(forum *models.Forum) error {
 	if err := f.forum.GetBySlug(forum); err != nil {
-		return errors.Wrap(err, utils.ForumNotExist)
+		return err
 	}
 
 	return nil
 }
 
-func (f *ForumApp) GetForumThreads(forum *models.Forum, desc, limit, since string) ([]models.Thread, error) {
+func (f *Forum) GetForumThreads(forum *models.Forum, desc, limit, since string) ([]models.Thread, error) {
 	if err := f.forum.GetBySlug(forum); err != nil {
-		return nil, errors.Wrap(err, utils.ForumNotExist)
+		return nil, errors.Wrap(err, infrastructure.ForumNotExist.Error())
 	}
 
 	threads, err := f.forum.GetThreads(forum, desc, limit, since)
@@ -62,12 +62,12 @@ func (f *ForumApp) GetForumThreads(forum *models.Forum, desc, limit, since strin
 	return threads, nil
 }
 
-func (f *ForumApp) GetForumUsers(forum *models.Forum, desc, limit, since string) ([]models.User, error) {
+func (f *Forum) GetForumUsers(forum *models.Forum, desc, limit, since string) ([]models.User, error) {
 	if err := f.forum.GetBySlug(forum); err != nil {
-		return nil, errors.Wrap(err, utils.ForumNotExist)
+		return nil, errors.Wrap(err, infrastructure.ForumNotExist.Error())
 	}
 
-	usr, err := forumApp.forumRepo.GetUsers(f, desc, limit, since)
+	usr, err := f.forum.GetUsers(forum, desc, limit, since)
 	if err != nil {
 		return nil, err
 	}

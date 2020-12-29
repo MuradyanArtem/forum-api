@@ -1,29 +1,35 @@
 package app
 
 import (
-	"forum-api/internal/pkg/domain/models"
-	"forum-api/internal/pkg/domain/repository"
+	"forum-api/internal/domain/models"
+	"forum-api/internal/domain/repository"
+	"forum-api/internal/infrastructure"
 
 	"github.com/pkg/errors"
+)
+
+var (
+	UserNotUpdated = errors.New("User cannot be updated")
 )
 
 type User struct {
 	user repository.User
 }
 
-func NewUserApp(user repository.User) *User {
+func newUser(user repository.User) *User {
 	return &User{
 		user,
 	}
 }
 
 func (u *User) CreateUser(user *models.User) ([]models.User, error) {
-	err := u.user.InsertInto(user)
-	if err != nil {
-		users, e := userApp.userRepo.GetByNicknameOrEmail(user)
-		err = e
-		utils.HandleError(err)
-		return users, errors.Wrap(err, utils.UserExist)
+
+	if err := u.user.InsertInto(user); err != nil {
+		users, e := u.user.GetByNicknameOrEmail(user)
+		if e != nil {
+			return nil, errors.Wrap(err, e.Error())
+		}
+		return users, err
 	}
 
 	return nil, nil
@@ -31,7 +37,7 @@ func (u *User) CreateUser(user *models.User) ([]models.User, error) {
 
 func (u *User) GetUser(user *models.User) error {
 	if err := u.user.GetByNickname(user); err != nil {
-		return errors.Wrap(err, utils.UserNotExist)
+		return err
 	}
 
 	return nil
@@ -39,8 +45,8 @@ func (u *User) GetUser(user *models.User) error {
 
 func (u *User) UpdateUser(user *models.User) error {
 	uInfo := *user
-	if err := userApp.userRepo.GetByNickname(&uInfo); err != nil {
-		return utils.UserNotExist
+	if err := u.user.GetByNickname(&uInfo); err != nil {
+		return errors.Wrap(infrastructure.UserNotExist, err.Error())
 	}
 
 	if user.Email == "" {
@@ -55,8 +61,8 @@ func (u *User) UpdateUser(user *models.User) error {
 		user.Fullname = uInfo.Fullname
 	}
 
-	if err := userApp.userRepo.Update(user); err != nil {
-		return errors.Wrap(err, utils.UserNotUpdated)
+	if err := u.user.Update(user); err != nil {
+		return errors.Wrap(infrastructure.UserNotUpdated, err.Error())
 	}
 
 	return nil
