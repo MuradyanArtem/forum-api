@@ -10,218 +10,219 @@ ALTER SYSTEM SET max_parallel_workers_per_gather = '2';
 ALTER SYSTEM SET max_parallel_workers = '4';
 ALTER SYSTEM SET max_parallel_maintenance_workers = '2';
 
-DROP trigger IF EXISTS path_updater                   ON post;
-DROP trigger IF EXISTS thread_updater                 ON thread;
-DROP trigger IF EXISTS forum_users_clear              ON forum_users;
-DROP trigger IF EXISTS forum_user_insert_after_thread ON thread;
-DROP trigger IF EXISTS forum_user_insert_after_post   ON post;
-DROP trigger IF EXISTS insert_into_thread_votes       ON thread;
-DROP trigger IF EXISTS update_thread_votes            ON thread;
-DROP trigger IF EXISTS upd_forum_threads              ON thread;
+CREATE EXTENSION IF NOT EXISTS citext;
 
-DROP FUNCTION IF EXISTS update_path;
-DROP FUNCTION IF EXISTS update_forum_users;
-DROP FUNCTION IF EXISTS insert_thread_votes;
-DROP FUNCTION IF EXISTS insert_into_forum_users;
-DROP FUNCTION IF EXISTS update_forum_threads;
-
-DROP TABLE IF EXISTS usr         CASCADE;
-DROP TABLE IF EXISTS forum       CASCADE;
-DROP TABLE IF EXISTS thread      CASCADE;
-DROP TABLE IF EXISTS post        CASCADE;
-DROP TABLE IF EXISTS vote        CASCADE;
-DROP TABLE IF EXISTS forum_users CASCADE;
-
-CREATE EXTENSION IF NOT EXISTS CITEXT;
-
------------------------- USER ------------------------------------------
-CREATE UNLOGGED TABLE usr
+CREATE UNLOGGED TABLE users
 (
-    id       SERIAL             PRIMARY KEY,
-    email    CITEXT COLLATE "C" NOT NULL UNIQUE,
-    nickname CITEXT COLLATE "C" NOT NULL UNIQUE,
-    fullname TEXT               NOT NULL,
-    about    TEXT
+    nickname CITEXT PRIMARY KEY NOT NULL,
+    email    CITEXT UNIQUE      NOT NULL,
+    about    TEXT               NOT NULL,
+    fullname TEXT               NOT NULL
 );
 
-CREATE INDEX index_user_all ON usr (nickname, fullname, email, about);
-CLUSTER usr USING index_user_all;
+CREATE UNIQUE INDEX ON users (nickname, email);
+CREATE UNIQUE INDEX ON users (nickname, email, about, fullname);
+CREATE UNIQUE INDEX ON users (nickname DESC);
 
-------------------------- FORUM ------------------------------------
-CREATE UNLOGGED TABLE forum
+CREATE UNLOGGED TABLE forums
 (
-    id      SERIAL             PRIMARY KEY,
-    slug    CITEXT COLLATE "C" NOT NULL UNIQUE,
-    usr     CITEXT COLLATE "C" NOT NULL REFERENCES usr (nickname) ON DELETE CASCADE,
-    title   TEXT               NOT NULL,
-    threads BIGINT DEFAULT 0,
-    posts   BIGINT DEFAULT 0
+    slug     CITEXT PRIMARY KEY                                   NOT NULL,
+    title    TEXT                                                 NOT NULL,
+    nickname CITEXT REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    posts    INTEGER DEFAULT 0                                    NOT NULL,
+    threads  INTEGER DEFAULT 0                                    NOT NULL
 );
 
-CREATE INDEX index_forum_slug_hash ON forum USING HASH (slug);
-CREATE INDEX index_usr_fk          ON forum (usr);
-CREATE INDEX index_forum_all       ON forum (slug, title, usr, posts, threads);
-
-------------------------- THREAD ---------------------------------------
-CREATE UNLOGGED TABLE thread
-(
-    id      SERIAL             PRIMARY KEY,
-    title   TEXT               NOT NULL,
-    message TEXT               NOT NULL,
-    created TIMESTAMP WITH TIME ZONE,
-    slug    CITEXT COLLATE "C" UNIQUE,
-    votes   INT DEFAULT 0,
-    usr     CITEXT COLLATE "C" NOT NULL REFERENCES usr (nickname) ON DELETE CASCADE,
-    forum   CITEXT COLLATE "C" NOT NULL REFERENCES forum (slug)   ON DELETE CASCADE
-);
-
-CREATE INDEX index_thread_forum_created ON thread (forum, created);
-CREATE INDEX index_thread_slug          ON thread (slug);
-CREATE INDEX index_thread_slug_hash     ON thread USING HASH (slug);
-CREATE INDEX index_thread_all           ON thread (title, message, CREATEd, slug, usr, forum, votes);
-CREATE INDEX index_thread_usr_fk        ON thread (usr);
-CREATE INDEX index_thread_forum_fk      ON thread (forum);
-
-------------------------- POST --------------------------------------------------------------
-CREATE UNLOGGED TABLE post
-(
-    id       BIGSERIAL             PRIMARY KEY,
-    message  TEXT                  NOT NULL,
-    isedited BOOLEAN DEFAULT false NOT NULL,
-    parent   INTEGER DEFAULT 0,
-    created  TIMESTAMP,
-    usr      CITEXT COLLATE "C"    NOT NULL REFERENCES usr (nickname) ON DELETE CASCADE,
-    thread   INTEGER               NOT NULL REFERENCES thread         ON DELETE CASCADE,
-    forum    CITEXT COLLATE "C"    NOT NULL REFERENCES forum (slug)   ON DELETE CASCADE,
-    path     BIGINT[]
-);
-
-CREATE INDEX index_post_thread_id          ON post (thread, id);
-CREATE INDEX index_post_thread_path        ON post (thread, path);
-CREATE INDEX index_post_thread_parent_path ON post (thread, parent, path);
-CREATE INDEX index_post_path1_path         ON post ((path[1]), path);
-CREATE INDEX index_post_thread_created_id  ON post (thread, CREATEd, id);
-CREATE INDEX index_post_usr_fk             ON post (usr);
-CREATE INDEX index_post_forum_fk           ON post (forum);
-
---------------------------- VOTE ------------------------------------------
-CREATE UNLOGGED TABLE vote
-(
-    id     SERIAL             PRIMARY KEY,
-    vote   INTEGER            NOT NULL,
-    usr    CITEXT COLLATE "C" NOT NULL references usr (nickname) ON DELETE CASCADE,
-    thread INTEGER            NOT NULL references thread         ON DELETE CASCADE
-);
-
-CREATE UNIQUE INDEX vote_user_thread_unique ON vote (usr, thread);
-CREATE INDEX index_vote_thread              ON vote (thread);
-
------------------------------- FORUM USERS -----------------------------------
 CREATE UNLOGGED TABLE forum_users
 (
-    forum    CITEXT COLLATE "C" NOT NULL REFERENCES forum (slug)   ON DELETE CASCADE,
-    nickname CITEXT COLLATE "C" NOT NULL REFERENCES usr (nickname) ON DELETE CASCADE
+    author CITEXT REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    slug   CITEXT REFERENCES forums (slug)    ON DELETE CASCADE NOT NULL,
+    PRIMARY KEY (slug, author)
 );
 
-CREATE UNIQUE INDEX INDEX_forum_nickname ON forum_users (forum, nickname);
-CLUSTER forum_users USING INDEX_forum_nickname;
+CREATE INDEX ON forum_users (slug);
+CREATE INDEX ON forum_users (author);
 
----------------------- UPDATE PATH ---------------------------
-CREATE OR REPLACE FUNCTION update_path()
-RETURNS trigger AS
-$BODY$
+CREATE UNLOGGED TABLE threads
+(
+    author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
+    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE     NOT NULL,
+    id         SERIAL PRIMARY KEY                                    NOT NULL,
+    message    TEXT                                                  NOT NULL,
+    slug       CITEXT,
+    title      TEXT                                                  NOT NULL,
+    votes      INTEGER                     DEFAULT 0                 NOT NULL
+);
+
+CREATE INDEX ON threads(slug, author);
+CREATE INDEX ON threads(forum_slug, created ASC);
+CREATE INDEX ON threads(forum_slug, created DESC);
+CREATE INDEX ON threads(slug, id);
+CREATE INDEX ON threads(id, forum_slug);
+CREATE INDEX ON threads(slug, id, forum_slug);
+
+CREATE UNLOGGED TABLE posts
+(
+    author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
+    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE     NOT NULL,
+    id         SERIAL PRIMARY KEY                                    NOT NULL,
+    edited     BOOL                        DEFAULT 'false'           NOT NULL,
+    message    TEXT                                                  NOT NULL,
+    parent     INTEGER                                               NOT NULL,
+    thread     INTEGER REFERENCES threads (id) ON DELETE CASCADE     NOT NULL,
+    path       INTEGER ARRAY               DEFAULT '{}'              NOT NULL
+);
+
+CREATE UNIQUE INDEX ON posts(id, thread);
+CREATE UNIQUE INDEX ON posts(id, author);
+CREATE        INDEX ON posts(thread, path DESC);
+CREATE        INDEX ON posts(thread, path ASC);
+CREATE        INDEX ON posts(thread, id DESC);
+CREATE        INDEX ON posts(thread, id ASC);
+
+CREATE UNLOGGED TABLE votes
+(
+    nickname  CITEXT  REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    thread_id INTEGER REFERENCES threads (id)     ON DELETE CASCADE NOT NULL,
+    vote      SMALLINT                                              NOT NULL,
+    PRIMARY KEY (thread_id, nickname)
+);
+
+CREATE UNIQUE INDEX ON votes(thread_id, nickname);
+CREATE        INDEX ON threads (slug, id);
+
+-- PATH TO POST UPDATE
+CREATE FUNCTION update_path() RETURNS TRIGGER AS
+$$
 DECLARE
-    parent_path         BIGINT[];
-    first_parent_thread INT;
+    temp INT ARRAY;
+    t    INTEGER;
 BEGIN
-    IF (NEW.parent = 0) THEN
-        NEW.path := array_append(NEW.path, NEW.id);
+    IF new.parent ISNULL OR new.parent = 0 THEN
+        new.path = ARRAY [new.id];
     ELSE
-        SELECT thread, path
-        FROM post
-        WHERE thread = NEW.thread AND id = NEW.parent
-        INTO first_parent_thread, parent_path;
-        IF NOT FOUND THEN
-            RAISE EXCEPTION 'Parent post not found in current thread' USING ERRCODE = '00404';
+        SELECT thread
+        INTO t
+        FROM posts
+        WHERE id = new.parent;
+        IF t ISNULL OR t <> new.thread THEN
+            RAISE EXCEPTION 'Not in this thread ID ' USING HINT = 'Please check your parent ID';
         END IF;
-        NEW.path := parent_path || NEW.id;
-    END IF;
-    RETURN NEW;
-END;
-$BODY$ LANGUAGE plpgsql;
 
-CREATE TRIGGER path_updater
-    BEFORE INSERT
-    ON post
-    FOR EACH ROW
-    EXECUTE PROCEDURE update_path();
+        SELECT path
+        INTO temp
+        FROM posts
+        WHERE id = new.parent;
+        new.path = array_append(temp, new.id);
 
--------------------------------- INSERT THREAD VOTES -----------------------
-CREATE OR REPLACE FUNCTION insert_thread_votes()
-RETURNS trigger AS
-$BODY$
-DECLARE
-BEGIN
-UPDATE thread SET votes = (votes + NEW.vote) WHERE id = NEW.thread;
-RETURN new;
-end;
-$BODY$ LANGUAGE plpgsql;
-
-CREATE trigger insert_thread_votes
-    BEFORE INSERT
-    ON vote
-    FOR EACH ROW
-    EXECUTE PROCEDURE insert_thread_votes();
-
-------------------------------- UPDATE THREAD VOTES -------------------------
-CREATE OR REPLACE FUNCTION update_thread_votes()
-RETURNS trigger AS
-$BODY$
-BEGIN
-    IF NEW.vote > 0 THEN
-        UPDATE thread SET votes = (votes + 2) WHERE id = NEW.thread;
-    ELSE
-        UPDATE thread SET votes = (votes - 2) WHERE id = NEW.thread;
     END IF;
     RETURN new;
 END;
-$BODY$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
-CREATE trigger update_thread_votes
-    BEFORE UPDATE
-    ON vote
+CREATE TRIGGER update_posts_path
+    BEFORE INSERT
+    ON posts
     FOR EACH ROW
-    EXECUTE PROCEDURE update_thread_votes();
+EXECUTE PROCEDURE update_path();
 
-------------------------------- UPDATE FORUM USERS -------------------
-CREATE OR REPLACE FUNCTION update_forum_users()
-RETURNS TRIGGER AS
-$BODY$
+-- VOTE VALUE UPDATE
+CREATE FUNCTION vote_count_upd() RETURNS TRIGGER AS
+$$
 BEGIN
-    INSERT INTO forum_user (forum, nickname) VALUES (NEW.forum, NEW.author)
+    IF (old.vote != new.vote) THEN
+        UPDATE threads
+        SET votes = (votes - old.vote + new.vote)
+        WHERE id = new.thread_id;
+    END IF;
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER vote_count_upd
+    AFTER UPDATE
+    ON votes
+    FOR EACH ROW
+EXECUTE PROCEDURE vote_count_upd();
+
+CREATE FUNCTION vote_count_insert() RETURNS TRIGGER AS
+$$
+BEGIN
+    UPDATE threads
+    SET votes = (votes + new.vote)
+    WHERE id = new.thread_id;
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER vote_count_insert
+    AFTER INSERT
+    ON votes
+    FOR EACH ROW
+EXECUTE PROCEDURE vote_count_insert();
+
+
+-- UPDATE FORUM_USER TABLE AFTER INSERTS
+CREATE FUNCTION insert_forum_user_from_threads_or_psoots() RETURNS TRIGGER AS
+$$
+BEGIN
+    INSERT INTO forum_users
+    VALUES (new.author, new.forum_slug)
     ON CONFLICT DO NOTHING;
-    RETURN NEW;
+    RETURN NULL;
 END;
-$BODY$ LANGUAGE plpgsql;
+$$
+    LANGUAGE plpgsql;
 
-CREATE TRIGGER forum_usr_updater
+CREATE TRIGGER update_forum_user_from_threads
     AFTER INSERT
-    ON thread
+    ON threads
     FOR EACH ROW
-    EXECUTE PROCEDURE update_forum_users();
+EXECUTE PROCEDURE insert_forum_user_from_threads_or_psoots();
 
-------------------------------- UPDATE FORUM THREADS -------------------
-CREATE OR REPLACE FUNCTION update_forum_threads()
-RETURNS trigger AS
-$BODY$
-BEGIN
-    UPDATE forum SET threads = (threads + 1) WHERE slug = NEW.forum;
-    RETURN NEW;
-END;
-$BODY$ language plpgsql;
-
-CREATE TRIGGER upd_forum_threads
+CREATE TRIGGER update_forum_user_from_posts
     AFTER INSERT
-    ON thread
-    FOR EACH row
-    EXECUTE PROCEDURE update_forum_threads();
+    ON posts
+    FOR EACH ROW
+EXECUTE PROCEDURE insert_forum_user_from_threads_or_psoots();
+
+-- UPDATE POSTS AND THREADS COUNTERS IN FORUMS
+CREATE FUNCTION update_forum_counter_posts() RETURNS TRIGGER AS
+$$
+BEGIN
+    UPDATE forums
+    SET posts = posts + 1
+    WHERE slug = new.forum_slug;
+
+    RETURN NULL;
+END;
+$$
+    LANGUAGE plpgsql;
+
+CREATE TRIGGER update_forum_counters_after_post_insert
+    AFTER INSERT
+    ON posts
+    FOR EACH ROW
+EXECUTE PROCEDURE update_forum_counter_posts();
+
+CREATE FUNCTION update_forum_counter_threads() RETURNS TRIGGER AS
+$$
+BEGIN
+    UPDATE forums
+    SET threads = threads + 1
+    WHERE slug = new.forum_slug;
+
+    RETURN NULL;
+END;
+$$
+    LANGUAGE plpgsql;
+
+CREATE TRIGGER update_forum_counters_after_thread_insert
+    AFTER INSERT
+    ON threads
+    FOR EACH ROW
+EXECUTE PROCEDURE update_forum_counter_threads();
+
+VACUUM ANALYSE;

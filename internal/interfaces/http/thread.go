@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"forum-api/internal/app"
 	"forum-api/internal/infrastructure"
+	"io/ioutil"
 	"net/http"
 
 	"forum-api/internal/domain/models"
@@ -58,7 +59,7 @@ func (t *Thread) GetThreadInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := json.Marshal(&thread)
+	res, err := json.Marshal(thread)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
@@ -76,14 +77,23 @@ func (t *Thread) GetThreadInfo(w http.ResponseWriter, r *http.Request) {
 func (t *Thread) CreateVote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
-	vote := &models.Vote{}
-	if err := json.Unmarshal(r.Body(), vote); err != nil {
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "CreateVote",
 		}).Error(err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
+	}
+	defer r.Body.Close()
+
+	vote := &models.Vote{}
+	if err := json.Unmarshal(data, vote); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "CreateVote",
+		}).Error(err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -115,7 +125,7 @@ func (t *Thread) CreateVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := json.Marshal(&thread)
+	res, err := json.Marshal(thread)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
@@ -133,16 +143,25 @@ func (t *Thread) CreateVote(w http.ResponseWriter, r *http.Request) {
 func (t *Thread) UpdateThread(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "CreateVote",
+		}).Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	defer r.Body.Close()
+
 	thread := &models.Thread{}
 	thread.Slug = mux.Vars(r)["slug"]
 
-	if err := json.Unmarshal(r.Body(), thread); err != nil {
+	if err := json.Unmarshal(data, thread); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "UpdateThread",
 		}).Error(err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
 		return
 	}
 
@@ -171,7 +190,7 @@ func (t *Thread) UpdateThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := json.Marshal(&thread)
+	res, err := json.Marshal(thread)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
@@ -224,7 +243,7 @@ func (t *Thread) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := json.Marshal(&posts)
+	res, err := json.Marshal(posts)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
@@ -243,21 +262,30 @@ func (t *Thread) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 func (t *Thread) CreatePosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "CreateVote",
+		}).Error(err)
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	defer r.Body.Close()
+
 	posts := &models.Posts{}
-	if err := json.Unmarshal(r.Body(), posts); err != nil {
+	if err := json.Unmarshal(data, posts); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "CreatePosts",
 		}).Error(err)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write(res)
 		return
 	}
 
 	thread := &models.Thread{}
 	thread.Slug = mux.Vars(r)["slug"]
 
-	if err := t.post.CreatePosts(posts, thread); err != nil {
+	if err := t.post.CreatePosts(*posts, thread); err != nil {
 		if errors.Is(err, infrastructure.ParentNotExist) {
 			res, err := json.Marshal(
 				&models.Message{
@@ -278,7 +306,7 @@ func (t *Thread) CreatePosts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if errors.Is(err, infrastructure.ThreadNotExist) || errors.Is(err, tools.UserNotExist) {
+		if errors.Is(err, infrastructure.ThreadNotExist) || errors.Is(err, infrastructure.UserNotExist) {
 			res, err := json.Marshal(
 				&models.Message{
 					Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
@@ -294,14 +322,23 @@ func (t *Thread) CreatePosts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		res, err := json.Marshal(&tools.Message{Message: err.Error()})
-		tools.HandleError(err)
+		res, err := json.Marshal(&models.Message{Message: err.Error()})
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"pack": "http",
+				"func": "CreatePosts",
+			}).Error(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(res)
+			return
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write(res)
 		return
 	}
 
-	res, err := json.Marshal(&posts)
+	res, err := json.Marshal(posts)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",

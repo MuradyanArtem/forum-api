@@ -1,15 +1,20 @@
-FROM golang:latest AS build_step
-ENV GO111MODULE=on
+FROM golang:latest AS build
+
 WORKDIR  /go/src
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /go/build/forum /go/src/cmd/server/main.go
+
+RUN GO111MODULE=on \
+    CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    go build -o forum cmd/forum-api/main.go
 
 FROM alpine
 WORKDIR /app
 
-COPY --from=build_step /go/build/forum .
+COPY --from=build /go/src/forum .
 RUN chmod +x forum
 
-ENTRYPOINT ["forum"]
+ENTRYPOINT ["/app/forum"]
 
 EXPOSE 8000/tcp

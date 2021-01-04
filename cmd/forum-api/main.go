@@ -5,24 +5,21 @@ import (
 	"forum-api/internal/app"
 	"forum-api/internal/infrastructure"
 	"forum-api/internal/infrastructure/persistence"
-	"forum-api/internal/interfaces/http"
+	router "forum-api/internal/interfaces/http"
 	"log"
-	"net/http"
 	"os"
-	"time"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"github.com/valyala/fasthttp"
 )
-
-const TIMEOUT = 3
 
 func main() {
 	var srvPort string
 	pflag.StringVarP(&srvPort, "port", "p", "8000", "bind port")
 	var srvHost string
-	pflag.StringVarP(&srvHost, "host", "ip", "", "host addr")
-
+	pflag.StringVarP(&srvHost, "ip", "i", "", "listen addr")
 	var isHelp bool
 	pflag.BoolVarP(&isHelp, "help", "h", false, "usage info")
 	var logLevel string
@@ -51,7 +48,7 @@ func main() {
 		logrus.WithFields(logrus.Fields{
 			"pack": "main",
 			"func": "main",
-		}).Fatalln("DB_HOST is not set")
+		}).Fatalln("DB_PORT is not set")
 	}
 	bdName, exist := os.LookupEnv("DB_NAME")
 	if !exist {
@@ -75,9 +72,17 @@ func main() {
 		}).Fatalln("DB_PASSWORD is not set")
 	}
 
+	bdPortInt, err := strconv.Atoi(bdPort)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "main",
+			"func": "main",
+		}).Fatalln("DB_PORT is invalid")
+	}
+
 	appRepo, err := persistence.New(&persistence.DBConfig{
 		Host:                 bdHost,
-		Port:                 bdPort,
+		Port:                 uint16(bdPortInt),
 		Database:             bdName,
 		User:                 bdUser,
 		Password:             bdPassword,
@@ -100,14 +105,7 @@ func main() {
 		}).Fatalln("Cannot initialise application", err)
 	}
 
-	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%s", srvHost, srvPort),
-		Handler:      router.New(app),
-		WriteTimeout: time.Duration(TIMEOUT) * time.Second,
-		ReadTimeout:  time.Duration(TIMEOUT) * time.Second,
-	}
-
-	if err := server.ListenAndServe(); err != nil {
+	if err := fasthttp.ListenAndServe(fmt.Sprintf("%s:%s", srvHost, srvPort), router.New(app)); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "main",
 			"func": "main",

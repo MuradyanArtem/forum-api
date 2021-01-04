@@ -1,12 +1,11 @@
 package persistence
 
 import (
-	"database/sql"
+	"fmt"
 	"forum-api/internal/domain/models"
-	"time"
+	"forum-api/internal/infrastructure"
 
 	"github.com/jackc/pgx"
-	"github.com/sirupsen/logrus"
 )
 
 type Post struct {
@@ -17,140 +16,179 @@ func newPost(db *pgx.ConnPool) *Post {
 	return &Post{db: db}
 }
 
-func (p *Post) InsertInto(posts []*models.Post, thread *models.Thread) error {
-	tx, err := p.db.Begin()
+func (p *Post) SelectThreadByPostID(id int) (int, error) {
+	tID := 0
+	err := p.db.QueryRow("SELECT thread FROM posts WHERE id = $1", &id).Scan(&tID)
+	return tID, err
+}
+
+func (p *Post) InsertPost(posts []*models.Post, forum string, id int) error {
+	if len(posts) == 0 {
+		return nil
+	}
+	query := "INSERT INTO posts (author, forum_slug, message, parent, thread) values "
+	if len(posts) == 0 {
+		return nil
+	}
+	for i, post := range posts {
+		if i != 0 {
+			query += ", "
+		}
+		query += fmt.Sprintf("('%s', '%s', '%s', %d, %d) ",
+			post.Author,
+			forum,
+			post.Message,
+			post.Parent,
+			id)
+	}
+
+	query += "RETURNING id, created"
+	rows, err := p.db.Query(query)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
 
-	created := sql.NullTime{}
-	for i, _ := range posts {
-		posts[i].Thread = thread.ID
-		posts[i].Forum = thread.Forum
-
-		err = tx.QueryRow(
-			"post_insert_into",
-			posts[i].Author,
-			posts[i].Message,
-			posts[i].Parent,
-			posts[i].Thread,
-			posts[i].Forum).Scan(&posts[i].ID, &created)
-
-		if err != nil {
+	for idx := 0; rows.Next(); idx++ {
+		posts[idx].Forum = forum
+		posts[idx].Thread = id
+		if err := rows.Scan(&posts[idx].ID, &posts[idx].Created); err != nil {
 			return err
 		}
-
-		if created.Valid {
-			posts[i].Created = created.Time.Format(time.RFC3339Nano)
+	}
+	if rows.Err() != nil {
+		switch infrastructure.ErrorCode(rows.Err()) {
+		case infrastructure.PgConflict:
+			return infrastructure.ErrConflict
+		default:
+			return rows.Err()
 		}
 	}
-
-	if len(posts) > 0 {
-		_, err := tx.Exec("forum_posts_update", len(posts), posts[0].Forum)
-		if err != nil {
-			logrus.Error("Error while update post count: " + err.Error())
-		}
-	}
-
 	return nil
 }
 
-func (p *Post) GetById(post *models.Post) error {
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	created := sql.NullTime{}
-	err = tx.QueryRow("post_get_by_id", post.ID).
-		Scan(&post.Author, &created, &post.Forum, &post.IsEdited, &post.Message, &post.Parent, &post.Thread, &post.Path)
-	if err != nil {
-		return err
-	}
-
-	if created.Valid {
-		post.Created = created.Time.Format(time.RFC3339Nano)
-	}
-
-	return nil
+func (p *Post) SelectPostByID(id int) (*models.Post, error) {
+	post := &models.Post{}
+	err := p.db.QueryRow("SELECT author, created, forum_slug, id, edited, message, parent, thread FROM posts WHERE id = "+
+		"$1", &id).Scan(&post.Author, &post.Created, &post.Forum,
+		&post.ID, &post.IsEdited, &post.Message, &post.Parent, &post.Thread)
+	return post, err
 }
 
 func (p *Post) Update(post *models.Post) error {
-	tx, err := p.db.Begin()
-	if err != nil {
+	var err error
+	if post.Message == "" {
+		err = p.db.QueryRow("SELECT author, created, forum_slug, id, edited,"+
+			" message, parent, thread FROM posts WHERE id = $1", &post.ID).Scan(&post.Author, &post.Created, &post.Forum,
+			&post.ID, &post.IsEdited, &post.Message, &post.Parent, &post.Thread)
 		return err
 	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	created := sql.NullTime{}
-	err = tx.QueryRow("post_update", post.Message, post.ID).
-		Scan(&post.Author, &created, &post.Forum, &post.IsEdited, &post.Message, &post.Parent, &post.Thread)
-	if err != nil {
-		return err
-	}
-
-	if created.Valid {
-		post.Created = created.Time.Format(time.RFC3339Nano)
-	}
-
-	return nil
+	err = p.db.QueryRow("UPDATE posts SET message = $1, edited = CASE "+
+		"WHEN ($1 = message AND edited = false) THEN false ELSE true  END WHERE id = $2 RETURNING author, created, forum_slug, id, edited,"+
+		" message, parent, thread", post.Message, post.ID).Scan(&post.Author, &post.Created, &post.Forum,
+		&post.ID, &post.IsEdited, &post.Message, &post.Parent, &post.Thread)
+	return err
 }
 
-func (p *Post) Prepare() error {
-	_, err := p.db.Prepare("post_insert_into",
-		"INSERT INTO post (usr, message,  parent, thread, forum, created) "+
-			"VALUES ($1, $2, $3, $4, $5, current_timestamp) "+
-			"RETURNING id, created",
-	)
-	if err != nil {
-		return err
+func (p *Post) GetPosts(threadID int, desc bool, since string, limit int, sort string) ([]models.Post, error) {
+	posts := []models.Post{}
+	query := ""
+
+	var err error
+	rows := &pgx.Rows{}
+	if since != "" {
+		switch sort {
+		case "tree":
+			query = "SELECT posts.id, posts.author, posts.forum_slug, posts.thread, " +
+				"posts.message, posts.parent, posts.edited, posts.created " +
+				"FROM posts %s posts.thread = $1 ORDER BY posts.path[1] %s, posts.path %s LIMIT $3"
+			if desc {
+				query = fmt.Sprintf(query, "JOIN posts P ON P.id = $2 WHERE posts.path < p.path AND",
+					"DESC",
+					"DESC")
+			} else {
+				query = fmt.Sprintf(query, "JOIN posts P ON P.id = $2 WHERE posts.path > p.path AND",
+					"ASC",
+					"ASC")
+			}
+		case "parent_tree":
+			query = "SELECT p.id, p.author, p.forum_slug, p.thread, p.message, p.parent, p.edited, p.created " +
+				"FROM posts as p WHERE p.thread = $1 AND " +
+				"p.path::integer[] && (SELECT ARRAY (select p.id from posts as p WHERE p.thread = $1 AND p.parent = 0 %s %s %s"
+			if desc {
+				query = fmt.Sprintf(query, " AND p.path < (SELECT p.path[1:1] FROM posts as p WHERE p.id = $2) ",
+					"ORDER BY p.path[1] DESC, p.path LIMIT $3)) ",
+					"ORDER BY p.path[1] DESC, p.path ")
+			} else {
+				query = fmt.Sprintf(query, " AND p.path > (SELECT p.path[1:1] FROM posts as p WHERE p.id = $2) ",
+					"ORDER BY p.path[1] ASC, p.path LIMIT $3)) ",
+					"ORDER BY p.path[1] ASC, p.path ")
+			}
+		default:
+			query = "SELECT id, author, forum_slug, thread, message, parent, edited, created " +
+				"FROM posts WHERE thread = $1 AND id %s $2 ORDER BY id %s LIMIT $3"
+			if desc {
+				query = fmt.Sprintf(query, "<", "DESC")
+			} else {
+				query = fmt.Sprintf(query, ">", "ASC")
+			}
+		}
+		rows, err = r.db.Query(query, threadID, since, limit)
+	} else {
+		switch sort {
+		case "tree":
+			if desc {
+				query = fmt.Sprintf("SELECT posts.id, posts.author, posts.forum_slug, posts.thread, " +
+					"posts.message, posts.parent, posts.edited, posts.created " +
+					"FROM posts WHERE posts.thread = $1 ORDER BY posts.path[1] DESC, posts.path DESC LIMIT $2")
+			} else {
+				query = fmt.Sprintf("SELECT posts.id, posts.author, posts.forum_slug, posts.thread, " +
+					"posts.message, posts.parent, posts.edited, posts.created " +
+					"FROM posts WHERE posts.thread = $1 ORDER BY posts.path[1] ASC, posts.path ASC LIMIT $2")
+			}
+		case "parent_tree":
+			if desc {
+				query = "SELECT p.id, p.author, p.forum_slug, p.thread, p.message, p.parent, p.edited, p.created " +
+					"FROM posts as p WHERE p.thread = $1 AND " +
+					"p.path::integer[] && (SELECT ARRAY (select p.id from posts as p WHERE p.thread = $1 AND p.parent = 0" +
+					"ORDER BY p.path[1] DESC, p.path LIMIT $2)) " +
+					"ORDER BY p.path[1] DESC, p.path"
+			} else {
+				query = "SELECT p.id, p.author, p.forum_slug, p.thread, p.message, p.parent, p.edited, p.created " +
+					"FROM posts as p WHERE p.thread = $1 AND " +
+					"p.path::integer[] && (SELECT ARRAY (select p.id from posts as p WHERE p.thread = $1 AND p.parent = 0 " +
+					"ORDER BY p.path[1] ASC, p.path LIMIT $2)) ORDER BY p.path[1] ASC, p.path"
+			}
+		default:
+			if desc {
+				query = "SELECT id, author, forum_slug, thread, message, parent, edited, created " +
+					"FROM posts WHERE thread = $1  ORDER BY id DESC LIMIT $2"
+			} else {
+				query = "SELECT id, author, forum_slug, thread, message, parent, edited, created " +
+					"FROM posts WHERE thread = $1 ORDER BY id ASC LIMIT $2"
+			}
+		}
+		rows, err = p.db.Query(query, threadID, limit)
 	}
 
-	_, err = p.db.Prepare("post_get_by_id",
-		"SELECT p.usr, p.created, p.forum, p.isEdited, p.message, p.parent, p.thread, p.path "+
-			"FROM post p "+
-			"WHERE p.id = $1",
-	)
 	if err != nil {
-		return err
+		return posts, err
 	}
 
-	_, err = p.db.Prepare("post_update",
-		"UPDATE post SET message = $1, isEdited = true "+
-			"WHERE id = $2 "+
-			"RETURNING usr, created, forum, isEdited, message, parent, thread",
-	)
-	if err != nil {
-		return err
+	for rows.Next() {
+		post := &models.Post{}
+		err := rows.Scan(
+			&post.ID,
+			&post.Author,
+			&post.Forum,
+			&post.Thread,
+			&post.Message,
+			&post.Parent,
+			&post.IsEdited,
+			&post.Created)
+		if err != nil {
+			return posts, err
+		}
+		posts = append(posts, *post)
 	}
-
-	_, err = p.db.Prepare("forum_posts_update",
-		"UPDATE forum  SET posts = (posts + $1) "+
-			"where slug = $2",
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return posts, nil
 }

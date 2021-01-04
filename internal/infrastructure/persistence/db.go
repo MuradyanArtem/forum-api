@@ -39,14 +39,6 @@ func New(conf *DBConfig) (*repository.App, error) {
 		Post:   newPost(dbConn),
 	}
 
-	if err = ar.User.Prepare(); err != nil {
-		return nil, err
-	}
-
-	if err = ar.Forum.Prepare(); err != nil {
-		return nil, err
-	}
-
 	if err = ar.Thread.Prepare(); err != nil {
 		return nil, err
 	}

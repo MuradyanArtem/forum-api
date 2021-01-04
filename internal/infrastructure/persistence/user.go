@@ -1,8 +1,8 @@
 package persistence
 
 import (
-	"database/sql"
 	"forum-api/internal/domain/models"
+	"forum-api/internal/infrastructure"
 
 	"github.com/jackc/pgx"
 )
@@ -15,243 +15,106 @@ func newUser(db *pgx.ConnPool) *User {
 	return &User{db: db}
 }
 
-func (userDB *User) InsertInto(user *models.User) error {
-	tx, err := userDB.db.Begin()
-	if err != nil {
-		return err
+func (u *User) Insert(user *models.User) error {
+	_, err := u.db.Exec("INSERT INTO users "+
+		"VALUES ($1, $2, $3, $4)",
+		user.Nickname,
+		user.Email,
+		user.About,
+		user.Fullname)
+	switch err {
+	case nil:
+		return nil
+	default:
+		return infrastructure.ErrConflict
 	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
+}
 
-	var info string
-	about := &sql.NullString{}
-
+func (u *User) Update(user *models.User) error {
+	query := "UPDATE users SET   "
 	if user.About != "" {
-		about.String = user.About
-		about.Valid = true
+		query += ` about = '` + user.About + "' , "
 	}
-
-	err = tx.QueryRow("user_insert", user.Email, user.Fullname, user.Nickname, about).Scan(&info)
+	if user.Fullname != "" {
+		query += " fullname = '" + user.Fullname + "' , "
+	}
+	if user.Email != "" {
+		query += " email = '" + user.Email + "' , "
+	}
+	query = query[:len(query)-2]
+	query += "WHERE nickname = '" + user.Nickname + "' RETURNING about, email, fullname, nickname "
+	if user.About == "" && user.Email == "" && user.Fullname == "" {
+		query = "SELECT about, email, fullname, nickname FROM users WHERE nickname = '" + user.Nickname + "' "
+	}
+	err := u.db.QueryRow(query).Scan(&user.About, &user.Email, &user.Fullname, &user.Nickname)
 	if err != nil {
-		return err
+		switch err {
+		case pgx.ErrNoRows:
+			return infrastructure.ErrNotExists
+		default:
+			return infrastructure.ErrConflict
+		}
 	}
-
 	return nil
 }
 
-func (userDB *User) GetByNickname(user *models.User) error {
-	tx, err := userDB.db.Begin()
-	if err != nil {
-		return err
+func (u *User) SelectByNickname(nickname string) (models.User, error) {
+	user := models.User{}
+	err := u.db.QueryRow("SELECT * FROM users "+
+		"WHERE nickname = $1 ", nickname).Scan(&user.Nickname, &user.Email, &user.About, &user.Fullname)
+	switch err {
+	case pgx.ErrNoRows:
+		return models.User{}, infrastructure.ErrNotExists
+	default:
+		return user, err
 	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	row := tx.QueryRow("user_get_by_nickname", user.Nickname)
-
-	fullname := &sql.NullString{}
-	about := &sql.NullString{}
-
-	if err := row.Scan(&user.Email, fullname, &user.Nickname, about); err != nil {
-		return err
-	}
-
-	if about.Valid {
-		user.About = about.String
-	}
-
-	if fullname.Valid {
-		user.Fullname = fullname.String
-	}
-
-	return nil
 }
 
-func (userDB *User) GetByNicknameOrEmail(user *models.User) ([]models.User, error) {
-	tx, err := userDB.db.Begin()
+func (u *User) SelectByEmailOrNickname(nickname string, email string) (models.Users, error) {
+	users := []models.User{}
+	rows, err := u.db.Query("SELECT * FROM users "+
+		"WHERE nickname = $1 OR email = $2 LIMIT 2", nickname, email)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	rows, err := tx.Query("user_get_by_nickname_or_email", user.Nickname, user.Email)
-	if err != nil {
-		return nil, err
-	}
-
-	users := make([]models.User, 0)
 	for rows.Next() {
-		fullname := &sql.NullString{}
-		about := &sql.NullString{}
-
-		if err := rows.Scan(&user.Email, fullname, &user.Nickname, about); err != nil {
-			return nil, err
-		}
-
-		if about.Valid {
-			user.About = about.String
-		}
-
-		if fullname.Valid {
-			user.Fullname = fullname.String
-		}
-
-		users = append(users, *user)
+		user := models.User{}
+		rows.Scan(&user.Nickname, &user.Email, &user.About, &user.Fullname)
+		users = append(users, user)
 	}
-	rows.Close()
-
 	return users, nil
 }
 
-func (userDB *User) Update(user *models.User) error {
-	tx, err := userDB.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
+func (u *User) SelectNicknameWithCase(nickname string) (string, error) {
+	var result string
+	err := u.db.QueryRow("SELECT nickname FROM users "+
+		"WHERE nickname = $1 ", nickname).
+		Scan(&result)
 
-	_, err = tx.Exec("user_update", user.Email, user.Nickname, user.Fullname, user.About)
-	if err != nil {
-		return err
+	switch err {
+	case pgx.ErrNoRows:
+		return "", infrastructure.ErrNotExists
+	case nil:
+		return result, nil
+	default:
+		return "", err
 	}
-
-	return nil
 }
 
-func (userDB *User) DeleteAll() error {
-	tx, err := userDB.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	_, err = userDB.db.Exec("DELETE FROM usr")
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (u *User) DeleteAll() error {
+	_, err := u.db.Exec("TRUNCATE  votes, posts, forum_users, threads, forums, users CASCADE")
+	return err
 }
 
-func (userDB *User) GetStatus(s *models.Status) error {
-	tx, err := userDB.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err == nil {
-			_ = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-	}()
-
-	rows, err := tx.Query(
-		"SELECT count(*) FROM forum " +
-			"UNION ALL " +
-			"SELECT count(*) " +
-			"FROM post " +
-			"UNION ALL " +
-			"SELECT count(*) FROM thread " +
-			"UNION ALL " +
-			"SELECT count(*) FROM usr",
-	)
-	if err != nil {
-		return err
-	}
-
-	i := 0
-	for rows.Next() {
-		var err error
-		switch i {
-		case 0:
-			err = rows.Scan(&s.Forum)
-		case 1:
-			err = rows.Scan(&s.Post)
-		case 2:
-			err = rows.Scan(&s.Thread)
-		case 3:
-			err = rows.Scan(&s.User)
-		}
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		i++
-	}
-	rows.Close()
-
-	return nil
-}
-
-func (userDB *User) Prepare() error {
-	_, err := userDB.db.Prepare("user_insert",
-		"INSERT INTO usr (email, fullname, nickname, about) "+
-			"VALUES ($1, $2, $3, $4) "+
-			"ON CONFLICT DO NOTHING "+
-			"RETURNING email",
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = userDB.db.Prepare("user_get_by_nickname",
-		"SELECT u.email, u.fullname, u.nickname, u.about "+
-			"FROM usr u "+
-			"WHERE nickname = $1 ",
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = userDB.db.Prepare("user_get_by_nickname_or_email",
-		"SELECT u.email, u.fullname, u.nickname, u.about "+
-			"FROM usr u "+
-			"WHERE nickname = $1 OR email = $2",
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = userDB.db.Prepare("user_update",
-		"UPDATE usr SET "+
-			"email = $1, "+
-			"nickname = $2, "+
-			"fullname = $3, "+
-			"about = $4 "+
-			"WHERE nickname = $2 RETURNING email",
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (u *User) GetStatus(status *models.Status) error {
+	return u.db.QueryRow("SELECT "+
+		"(SELECT COUNT(*) FROM forums) as forums_status, "+
+		"(SELECT COUNT(*) FROM threads) as threads_status, "+
+		"(SELECT COUNT(*) FROM posts) as posts_status, "+
+		"(SELECT COUNT(*) FROM users) as users_status").
+		Scan(
+			&status.Forum,
+			&status.Thread,
+			&status.Post,
+			&status.User)
 }

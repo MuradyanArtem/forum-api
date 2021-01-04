@@ -1,8 +1,8 @@
 FROM postgres:alpine
 
-COPY assets/dump.sql /dump.sql
+COPY scripts/init.sql /init.sql
 
-COPY scripts/initdb.sh /docker-entrypoint-initdb.d/
-RUN chmod +x /docker-entrypoint-initdb.d/create-db.sh
+COPY scripts/initdb.sh /docker-entrypoint-initdb.d/initdb.sh
+RUN chmod +x /docker-entrypoint-initdb.d/initdb.sh
 
 EXPOSE 5432

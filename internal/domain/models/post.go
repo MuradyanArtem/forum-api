@@ -18,7 +18,7 @@ type Post struct {
 }
 
 //easyjson:json
-type Posts []Post
+type PostSlice []Post
 
 //easyjson:json
 type PostFull struct {

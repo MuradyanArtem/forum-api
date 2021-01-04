@@ -3,68 +3,36 @@ package http
 import (
 	"forum-api/internal/app"
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 func New(app *app.App) http.Handler {
-	router := mux.NewRouter()
+	uh := newUser(app.User)
+	fh := newForum(app.Forum, app.Thread, app.User)
+	th := newThread(app.Thread, app.Post)
+	ph := newPost(app.Post, app.User, app.Thread, app.Forum)
+	sh := newService(app.User)
 
-	uh := newUser(app.user)
-	fh := newForum(app.forum, app.thread)
-	th := newThread(app.thread, app.post)
-	ph := newPost(app.post, app.user, app.thread, app.forum)
-	sh := newService(app.user)
+	r := router.New()
+	r.GET("/api/service/status", sh.GetStatus)
+	r.POST("/api/service/clear", sh.DeleteAll)
 
-	router.HandleFunc("/api/service/status", sh.GetStatus).
-		Methods("GET")
-	router.HandleFunc("/api/service/clear", sh.DeleteAll).
-		Methods("POST")
+	r.GET("/api/user/{nickname}/profile", m.GetProfile)
+	r.POST("/api/user/{nickname}/create", m.CreateUser)
+	r.POST("/api/user/{nickname}/profile", m.UpdateProfile)
 
-	router.HandleFunc("/api/user/{nickname}/profile", uh.GetUser).
-		Methods("GET")
-	router.HandleFunc("/api/user/{nickname}/profile", uh.UpdateUser).
-		Methods("POST")
-	router.HandleFunc("/api/user/{nickname}/create", uh.AddUser).
-		Methods("POST")
+	r.GET("/api/forum/{slug}/details", fh.GetDetails)
+	r.GET("/api/forum/{slug}/users", fh.GetUsersByForum)
+	r.GET("/api/forum/{slug}/threads", m.GetThreadsByForum)
+	r.POST("/api/forum/{slug}/create", m.CreateThread)
+	r.POST("/api/forum/create", fh.CreateForum)
 
-	router.HandleFunc("/api/forum/{slug}/create", fh.CreateThread).
-		Methods()
-	router.HandleFunc("/api/forum/create", fh.CreateForum).
-		Methods("POST")
-	router.HandleFunc("/api/forum/{slug}/details", fh.GetForumInfo).
-		Methods("GET")
-	router.HandleFunc("/api/forum/{slug}/users", fh.GetForumUsers).
-		Methods("GET")
-	router.HandleFunc("/api/forum/{slug}/threads", fh.GetForumThreads).
-		Methods("GET").
-		Queries(
-			"desc",
-			"limit",
-			"since",
-		)
+	r.GET("/api/thread/{slugOrID}/details", m.Details)
+	r.GET("/api/thread/{slugOrID}/posts", m.GetPosts)
+	r.POST("/api/thread/{slugOrID}/details", m.Update)
+	r.POST("/api/thread/{slugOrID}/vote", m.Vote)
+	r.POST("/api/thread/{slugOrID}/create", m.Create)
 
-	router.HandleFunc("/api/thread/{slug}/details", th.GetThreadInfo).
-	Methods("GET")
-	router.HandleFunc("/api/thread/{slug}/details", th.UpdateThread).
-	Methods("POST")
-	router.HandleFunc("/api/thread/{slug}/vote", th.CreateVote).
-	Methods("POST")
-	router.HandleFunc("/api/thread/{slug}/create", th.CreatePosts).
-		Methods("POST")
-	router.HandleFunc("/api/thread/{slug}/posts", th.GetThreadPosts).
-		Queries(
-			"desc",
-			"sort",
-			"limit",
-			"since",
-		)
-
-	router.HandleFunc("/api/post/{id}/details", ph.UpdatePost).
-		Methods("POST")
-	router.HandleFunc("/api/post/{id}/details", ph.GetPost).
-		Methods("GET").
-		Queries("related")
-
-	return router
+	r.GET("/api/post/{id}/details", m.GetByID)
+	r.POST("/api/post/{id}/details", m.Update)
+	return r
 }

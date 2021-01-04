@@ -3,15 +3,11 @@ package repository
 import "forum-api/internal/domain/models"
 
 type User interface {
-	InsertInto(user *models.User) error
-
-	GetByNickname(user *models.User) error
-	GetByNicknameOrEmail(user *models.User) ([]models.User, error)
-	GetStatus(status *models.Status) error
-
+	Insert(user *models.User) error
 	Update(user *models.User) error
-
 	DeleteAll() error
-
-	Prepare() error
+	GetStatus(status *models.Status) error
+	SelectByNickname(nickname string) (models.User, error)
+	SelectNicknameWithCase(nickname string) (string, error)
+	SelectByEmailOrNickname(nickname string, email string) (models.UserSlice, error)
 }

@@ -1,15 +1,22 @@
 package infrastructure
 
-import "github.com/pkg/errors"
+import (
+	"github.com/jackc/pgx"
+	"github.com/pkg/errors"
+)
 
 var (
-	UserExist      = errors.New("User is already exist")
-	UserNotExist   = errors.New("User doesn't exist")
-	UserNotUpdated = errors.New("Can't update user")
-	ForumExist     = errors.New("Forum is already exist")
-	ForumNotExist  = errors.New("Forum doesn't exist")
-	PostNotExist   = errors.New("Post doesn't exist")
-	ParentNotExist = errors.New("Parent doesn't exist")
-	ThreadNotExist = errors.New("Thread doesn't exist")
-	ThreadExist    = errors.New("Thread is already exist")
+	ErrNotExists         = errors.New("Doesn't exists")
+	ErrConflict          = errors.New("New data conflicts with old data")
+	UserNotUpdated       = errors.New("User cannot be updated")
+	PgErrUniqueViolation = "23505"
+	PgErrConflict        = "P0001"
 )
+
+func ErrCode(err error) string {
+	pgerr, ok := err.(pgx.PgError)
+	if !ok {
+		return ""
+	}
+	return pgerr.Code
+}

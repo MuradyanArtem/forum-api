@@ -6,7 +6,7 @@ services:
       dockerfile: build/api.Dockerfile
     image: forum-api
     ports:
-      - 127.0.0.1:8080:8000
+      - 127.0.0.1:5000:8000
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -19,9 +19,7 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
-        delay: 5s
         max_attempts: 3
-        window: 120s
 
   db:
     build:
@@ -29,7 +27,7 @@ services:
       dockerfile: build/postgres.Dockerfile
     image: forum-db
     environment:
-      BACKUP: /dump.sql
+      BACKUP: /init.sql
       POSTGRES_DB: forum
       POSTGRES_USER: forum
       POSTGRES_PASSWORD: password

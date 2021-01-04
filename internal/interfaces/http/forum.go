@@ -3,179 +3,82 @@ package http
 import (
 	"forum-api/internal/app"
 	"forum-api/internal/domain/models"
+	"forum-api/internal/infrastructure"
 	"net/http"
 
-	json "github.com/mailru/easyjson"
-
-	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"github.com/valyala/fasthttp"
 )
 
 type Forum struct {
-	forum  *app.Forum
-	thread *app.Thread
+	forum *app.Forum
+	user  *app.User
 }
 
-func newForum(forum *app.Forum, thread *app.Thread) *Forum {
+func newForum(forum *app.Forum, user *app.User) *Forum {
 	return &Forum{
 		forum,
-		thread,
+		user,
 	}
 }
 
-func (f *Forum) CreateForum(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
+func (f *Forum) CreateForum(ctx *fasthttp.RequestCtx) {
 	forum := &models.Forum{}
+	if err := unmarshal(ctx, forum); err != nil {
+		return
+	}
 
-	if err := json.Unmarshal(r.Body(), forum); err != nil {
+	var err error
+	forum.User, err = f.user.SelectNicknameWithCase(forum.User)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{err.Error()})
+		return
+	}
+
+	if err := f.forum.Create(forum); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "CreateForum",
 		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 
-	if err := f.forum.CreateForum(forum); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateForum",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res, err := json.Marshal(forum)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateForum",
-		}).Error(err)
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	w.Write(res)
-}
-
-func (f *Forum) GetForumInfo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	forum := &models.Forum{}
-	forum.Slug = mux.Vars(r)["slug"]
-
-	if err := f.forum.GetForum(forum); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(r)
-		return
-	}
-
-	res, err := json.Marshal(&forum)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (f *Forum) GetForumThreads(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	forum := &entity.Forum{}
-	forum.Slug = mux.Vars(r)["slug"]
-
-	threads, err := f.forum.GetForumThreads(forum, r.FormValue("desc"), r.FormValue("limit"), r.FormValue("since"))
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res, err := json.Marshal(threads)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (f *Forum) GetForumUsers(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	forum := &models.Forum{}
-	forum.Slug = mux.Vars(r)["slug"]
-
-	users, err := f.forum.GetForumUsers(forum, r.FormValue("desc"), r.FormValue("limit"), r.FormValue("since"))
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	res, err := json.Marshal(users)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetForumUsers",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (f *Forum) CreateThread(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	thread, err := models.GetThreadFromBody(r.Body)
-	tools.HandleError(err)
-	vars := mux.Vars(r)
-
-	t.Forum = vars["forum"]
-	if err := t.threadApp.CreateThread(t); err != nil {
-		if err == tools.ThreadExist {
-			w.WriteHeader(http.StatusConflict)
-			res, err := json.Marshal(&t)
-			w.Write(res)
-			return
+		switch err {
+		case infrastructure.ErrNotExists:
+			send(ctx, http.StatusNotFound, models.Message{err.Error()})
+		case infrastructure.ErrConflict:
+			forumInBase, _ := f.forum.SelectBySlug(forum.Slug)
+			send(ctx, http.StatusConflict, forumInBase)
+		default:
+			send(ctx, http.StatusInternalServerError, models.Message{err.Error()})
 		}
 
-		if err == tools.UserNotExist {
-			w.WriteHeader(http.StatusNotFound)
-			res, err := json.Marshal(&models.Message{Message: "user not exist"})
-			w.Write(res)
-			return
-		}
+		return
 	}
+	send(ctx, http.StatusOK, forum)
+}
 
-	w.WriteHeader(http.StatusCreated)
-	res, err := json.Marshal(&th)
-	tools.HandleError(err)
-	w.Write(res)
+func (f *Forum) Details(ctx *fasthttp.RequestCtx) {
+	forum, err := f.forum.SelectBySlug(ctx.UserValue("slug").(string))
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "Details",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{err.Error()})
+	}
+	send(ctx, http.StatusOK, forum)
+}
+
+func (f *Forum) GetUsersByForum(ctx *fasthttp.RequestCtx) {
+	params := getParams(ctx)
+	slug := ctx.UserValue("slug").(string)
+
+	users, err := f.forum.GetUsersByForum(slug, params.Desc, params.Since, params.Limit)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetUsersByForum",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{err.Error()})
+	}
+	send(ctx, http.StatusOK, users)
 }

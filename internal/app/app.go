@@ -12,8 +12,8 @@ type App struct {
 func New(r *repository.App) *App {
 	return &App{
 		newUser(r.User),
-		newForum(r.Forum, r.User),
-		newThread(r.Thread, r.Forum),
-		newPost(r.Post, r.Thread),
+		newForum(r.Forum),
+		newThread(r.Thread),
+		newPost(r.Post),
 	}
 }

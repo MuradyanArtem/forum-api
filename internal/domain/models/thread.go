@@ -3,7 +3,7 @@ package models
 //easyjson:json
 type Thread struct {
 	ID      int64  `json:"id"`
-	Slug    string `json:"slug"`
+	Slug    string `json:"slug,omitempty"`
 	Title   string `json:"title"`
 	Message string `json:"message"`
 	Forum   string `json:"forum"`
@@ -13,4 +13,4 @@ type Thread struct {
 }
 
 //easyjson:json
-type Threads []Thread
+type ThreadSlice []Thread

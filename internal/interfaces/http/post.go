@@ -1,28 +1,27 @@
 package http
 
 import (
-	"fmt"
+	"bytes"
 	"forum-api/internal/app"
 	"forum-api/internal/domain/models"
+	"forum-api/internal/infrastructure"
 	"net/http"
-	"sort"
 	"strconv"
-	"strings"
 
-	"github.com/gorilla/mux"
 	json "github.com/mailru/easyjson"
 	"github.com/sirupsen/logrus"
+	"github.com/valyala/fasthttp"
 )
 
 type Post struct {
-	postApp   *app.Post
-	userApp   *app.User
-	threadApp *app.Thread
-	forumApp  *app.Forum
+	post   *app.Post
+	user   *app.User
+	thread *app.Thread
+	forum  *app.Forum
 }
 
 func newPost(post *app.Post, user *app.User, thread *app.Thread, forum *app.Forum) *Post {
-	return &PostHandler{
+	return &Post{
 		post,
 		user,
 		thread,
@@ -30,148 +29,123 @@ func newPost(post *app.Post, user *app.User, thread *app.Thread, forum *app.Foru
 	}
 }
 
-func (p *Post) GetPost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	related := strings.Split(r.FormValue("related"), ",")
-
-	var err error
-	post := &models.Post{}
-	post.ID, err = strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+func (p *Post) Create(ctx *fasthttp.RequestCtx) {
+	id, forum, err := p.thread.GetForumIDBySlug(ctx.UserValue("slug").(string))
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetPost",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
+		marshall(ctx, models.Message{err.Error()})
+		setStatus(ctx, http.StatusNotFound)
 		return
 	}
 
-	if err := p.post.GetPost(post); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetPost",
-		}).Error(err)
-		res, err := json.Marshal(&tools.Message{Message: err.Error()})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetPost",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
+	posts := &models.PostSlice{}
+	if err := unmarshal(ctx, posts); err != nil {
+		setStatus(ctx, http.StatusBadRequest)
 		return
 	}
 
-	user := nil
-	if sort.SearchStrings(related, "user") {
-		user = &models.User{}
-		user.Nickname = post.Author
-
-		if err := p.user.GetUser(user); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetPost",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-
-	thread := nil
-	if sort.SearchStrings(related, "thread") {
-		thread := &models.Thread{}
-		thread.Slug = strconv.FormatInt(post.Thread, 10)
-
-		if err := p.thread.GetThreadInfo(thread); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetPost",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-
-	forum := nil
-	if sort.SearchStrings(related, "forum") {
-		forum := &models.Forum{}
-		forum.Slug = post.Forum
-
-		if err := p.forum.GetForum(forum); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetPost",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-
-	res, err := json.Marshal(&models.PostFull{
-		Post:   post,
-		Forum:  forum,
-		Thread: thread,
-		Author: user,
-	})
-	if err != nil {
+	if err := p.post.InsertPost(posts, forum, id); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "GetPost",
+			"func": "Create",
 		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
+
+		switch err {
+		case infrastructure.ErrConflict:
+			marshall(ctx, models.Message{err.Error()})
+			setStatus(ctx, http.StatusConflict)
+		default:
+			marshall(ctx, models.Message{err.Error()})
+			setStatus(ctx, http.StatusNotFound)
+		}
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	marshall(ctx, posts)
+	setStatus(ctx, http.StatusOK)
 }
 
-func (p *Post) UpdatePost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	var err error
+func (m *PostManager) Update(ctx *fasthttp.RequestCtx) {
+	idStr := ctx.UserValue("id").(string)
+	id, _ := strconv.Atoi(idStr)
 	post := &models.Post{}
-	post.ID, err = strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-
-	if err := p.post.UpdatePost(post); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdatePost",
-		}).Error(err)
-
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", post.ID),
-			})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "UpdatePost",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
+	if err := json.Unmarshal(ctx.PostBody(), post); err != nil {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.Write([]byte(`{"message": "` + "unmarshal not ok : " + err.Error() + `"}`))
 		return
 	}
+	post.ID = id
+	err := m.pUC.Update(post)
+	switch err {
+	case nil:
+		resp, _ := post.MarshalJSON()
+		utils.Send(200, ctx, resp)
+	default:
+		utils.Send(404, ctx, utils.MustMarshalError(err))
+	}
+}
 
-	res, err := json.Marshal(&post)
+func (m *PostManager) GetByID(ctx *fasthttp.RequestCtx) {
+	ctx.SetContentType("application/json")
+	related := ctx.QueryArgs().Peek("related")
+	idStr := ctx.UserValue("id").(string)
+	id, _ := strconv.Atoi(idStr)
+	details := &models.PostDetails{}
+	var err error
+	details.Post, err = m.pUC.SelectPostByID(id)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdatePost",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
+		ctx.SetStatusCode(404)
+		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		return
+	}
+	user, err := m.uUC.SelectByNickname(details.Post.Author)
+	details.User = &user
+	if err != nil {
+		ctx.SetStatusCode(404)
+		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		return
+	}
+	details.Thread, err = m.tUC.SelectByID(details.Post.Thread)
+	if err != nil {
+		ctx.SetStatusCode(404)
+		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		return
+	}
+	details.Forum, err = m.fUC.SelectBySlug(details.Thread.Forum)
+	if err != nil {
+		ctx.SetStatusCode(404)
+		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	if !bytes.Contains(related, []byte("user")) {
+		details.User = nil
+	}
+	if !bytes.Contains(related, []byte("forum")) {
+		details.Forum = nil
+	}
+	if !bytes.Contains(related, []byte("thread")) {
+		details.Thread = nil
+	}
+
+	resp, _ := details.MarshalJSON()
+	ctx.Write(resp)
+	ctx.SetStatusCode(200)
+}
+
+func (m *PostManager) GetPosts(ctx *fasthttp.RequestCtx) {
+	params := utils.MustGetParams(ctx)
+	slug := ctx.UserValue("slugOrID").(string)
+	thread, err := m.tUC.SelectBySlugOrID(slug)
+	if err != nil {
+		utils.Send(404, ctx, utils.MustMarshalError(err))
+		return
+	}
+	posts, err := m.pUC.GetPosts(thread.ID, params.Desc, params.Since, params.Limit, params.Sort)
+	switch err {
+	case nil:
+		resp, _ := json.Marshal(posts)
+		utils.Send(200, ctx, resp)
+	default:
+		utils.Send(404, ctx, utils.MustMarshalError(err))
+	}
 }

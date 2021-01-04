@@ -37,7 +37,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels(in *jlexer.Lexer, out *V
 		}
 		switch key {
 		case "voice":
-			out.Vote = int32(in.Int32())
+			out.Voice = int32(in.Int32())
 		case "nickname":
 			out.Nickname = string(in.String())
 		case "thread":
@@ -59,7 +59,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels(out *jwriter.Writer, in 
 	{
 		const prefix string = ",\"voice\":"
 		out.RawString(prefix[1:])
-		out.Int32(int32(in.Vote))
+		out.Int32(int32(in.Voice))
 	}
 	{
 		const prefix string = ",\"nickname\":"
@@ -97,7 +97,7 @@ func (v *Vote) UnmarshalJSON(data []byte) error {
 func (v *Vote) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels(l, v)
 }
-func easyjsonD2b7633eDecodeForumApiInternalDomainModels1(in *jlexer.Lexer, out *Users) {
+func easyjsonD2b7633eDecodeForumApiInternalDomainModels1(in *jlexer.Lexer, out *UserSlice) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		in.Skip()
@@ -106,9 +106,9 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels1(in *jlexer.Lexer, out *
 		in.Delim('[')
 		if *out == nil {
 			if !in.IsDelim(']') {
-				*out = make(Users, 0, 1)
+				*out = make(UserSlice, 0, 1)
 			} else {
-				*out = Users{}
+				*out = UserSlice{}
 			}
 		} else {
 			*out = (*out)[:0]
@@ -125,7 +125,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels1(in *jlexer.Lexer, out *
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeForumApiInternalDomainModels1(out *jwriter.Writer, in Users) {
+func easyjsonD2b7633eEncodeForumApiInternalDomainModels1(out *jwriter.Writer, in UserSlice) {
 	if in == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
 		out.RawString("null")
 	} else {
@@ -141,26 +141,26 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels1(out *jwriter.Writer, in
 }
 
 // MarshalJSON supports json.Marshaler interface
-func (v Users) MarshalJSON() ([]byte, error) {
+func (v UserSlice) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels1(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
-func (v Users) MarshalEasyJSON(w *jwriter.Writer) {
+func (v UserSlice) MarshalEasyJSON(w *jwriter.Writer) {
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels1(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
-func (v *Users) UnmarshalJSON(data []byte) error {
+func (v *UserSlice) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels1(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *Users) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (v *UserSlice) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels1(l, v)
 }
 func easyjsonD2b7633eDecodeForumApiInternalDomainModels2(in *jlexer.Lexer, out *User) {
@@ -250,7 +250,7 @@ func (v *User) UnmarshalJSON(data []byte) error {
 func (v *User) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels2(l, v)
 }
-func easyjsonD2b7633eDecodeForumApiInternalDomainModels3(in *jlexer.Lexer, out *Threads) {
+func easyjsonD2b7633eDecodeForumApiInternalDomainModels3(in *jlexer.Lexer, out *ThreadSlice) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		in.Skip()
@@ -259,9 +259,9 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels3(in *jlexer.Lexer, out *
 		in.Delim('[')
 		if *out == nil {
 			if !in.IsDelim(']') {
-				*out = make(Threads, 0, 0)
+				*out = make(ThreadSlice, 0, 0)
 			} else {
-				*out = Threads{}
+				*out = ThreadSlice{}
 			}
 		} else {
 			*out = (*out)[:0]
@@ -278,7 +278,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels3(in *jlexer.Lexer, out *
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeForumApiInternalDomainModels3(out *jwriter.Writer, in Threads) {
+func easyjsonD2b7633eEncodeForumApiInternalDomainModels3(out *jwriter.Writer, in ThreadSlice) {
 	if in == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
 		out.RawString("null")
 	} else {
@@ -294,26 +294,26 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels3(out *jwriter.Writer, in
 }
 
 // MarshalJSON supports json.Marshaler interface
-func (v Threads) MarshalJSON() ([]byte, error) {
+func (v ThreadSlice) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels3(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
-func (v Threads) MarshalEasyJSON(w *jwriter.Writer) {
+func (v ThreadSlice) MarshalEasyJSON(w *jwriter.Writer) {
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels3(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
-func (v *Threads) UnmarshalJSON(data []byte) error {
+func (v *ThreadSlice) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels3(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *Threads) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (v *ThreadSlice) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels3(l, v)
 }
 func easyjsonD2b7633eDecodeForumApiInternalDomainModels4(in *jlexer.Lexer, out *Thread) {
@@ -370,7 +370,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels4(out *jwriter.Writer, in
 		out.RawString(prefix[1:])
 		out.Int64(int64(in.ID))
 	}
-	{
+	if in.Slug != "" {
 		const prefix string = ",\"slug\":"
 		out.RawString(prefix)
 		out.String(string(in.Slug))
@@ -518,7 +518,7 @@ func (v *Status) UnmarshalJSON(data []byte) error {
 func (v *Status) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels5(l, v)
 }
-func easyjsonD2b7633eDecodeForumApiInternalDomainModels6(in *jlexer.Lexer, out *Posts) {
+func easyjsonD2b7633eDecodeForumApiInternalDomainModels6(in *jlexer.Lexer, out *PostSlice) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		in.Skip()
@@ -527,9 +527,9 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels6(in *jlexer.Lexer, out *
 		in.Delim('[')
 		if *out == nil {
 			if !in.IsDelim(']') {
-				*out = make(Posts, 0, 0)
+				*out = make(PostSlice, 0, 0)
 			} else {
-				*out = Posts{}
+				*out = PostSlice{}
 			}
 		} else {
 			*out = (*out)[:0]
@@ -546,7 +546,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels6(in *jlexer.Lexer, out *
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeForumApiInternalDomainModels6(out *jwriter.Writer, in Posts) {
+func easyjsonD2b7633eEncodeForumApiInternalDomainModels6(out *jwriter.Writer, in PostSlice) {
 	if in == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
 		out.RawString("null")
 	} else {
@@ -562,26 +562,26 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels6(out *jwriter.Writer, in
 }
 
 // MarshalJSON supports json.Marshaler interface
-func (v Posts) MarshalJSON() ([]byte, error) {
+func (v PostSlice) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels6(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
-func (v Posts) MarshalEasyJSON(w *jwriter.Writer) {
+func (v PostSlice) MarshalEasyJSON(w *jwriter.Writer) {
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels6(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
-func (v *Posts) UnmarshalJSON(data []byte) error {
+func (v *PostSlice) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels6(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *Posts) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (v *PostSlice) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels6(l, v)
 }
 func easyjsonD2b7633eDecodeForumApiInternalDomainModels7(in *jlexer.Lexer, out *PostFull) {
