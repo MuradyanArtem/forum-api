@@ -15,5 +15,5 @@ cd deployments
 ```
 Up testing stand
 ```bash
-docker-compose up -d --build --rm
+docker-compose up -d --build
 ```
