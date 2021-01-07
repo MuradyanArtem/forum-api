@@ -2,123 +2,108 @@ package http
 
 import (
 	"bytes"
-	"forum-api/internal/app"
 	"forum-api/internal/domain/models"
 	"forum-api/internal/infrastructure"
 	"net/http"
 	"strconv"
 
-	json "github.com/mailru/easyjson"
 	"github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 
-type Post struct {
-	post   *app.Post
-	user   *app.User
-	thread *app.Thread
-	forum  *app.Forum
-}
-
-func newPost(post *app.Post, user *app.User, thread *app.Thread, forum *app.Forum) *Post {
-	return &Post{
-		post,
-		user,
-		thread,
-		forum,
-	}
-}
-
-func (p *Post) Create(ctx *fasthttp.RequestCtx) {
-	id, forum, err := p.thread.GetForumIDBySlug(ctx.UserValue("slug").(string))
+func CreatePost(ctx *fasthttp.RequestCtx) {
+	id, forum, err := app.Thread.GetForumIDBySlug(ctx.UserValue("slug").(string))
 	if err != nil {
-		marshall(ctx, models.Message{err.Error()})
-		setStatus(ctx, http.StatusNotFound)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
 		return
 	}
 
 	posts := &models.PostSlice{}
-	if err := unmarshal(ctx, posts); err != nil {
-		setStatus(ctx, http.StatusBadRequest)
+	if err := unmarshall(ctx, posts); err != nil {
 		return
 	}
 
-	if err := p.post.InsertPost(posts, forum, id); err != nil {
+	if err := app.Post.InsertPost(*posts, forum, id); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "Create",
+			"func": "CreatePost",
 		}).Error(err)
 
 		switch err {
 		case infrastructure.ErrConflict:
-			marshall(ctx, models.Message{err.Error()})
-			setStatus(ctx, http.StatusConflict)
+			send(ctx, http.StatusConflict, models.Message{Message: err.Error()})
 		default:
-			marshall(ctx, models.Message{err.Error()})
-			setStatus(ctx, http.StatusNotFound)
+			send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
 		}
 		return
 	}
-
-	marshall(ctx, posts)
-	setStatus(ctx, http.StatusOK)
+	send(ctx, http.StatusCreated, posts)
 }
 
-func (m *PostManager) Update(ctx *fasthttp.RequestCtx) {
-	idStr := ctx.UserValue("id").(string)
-	id, _ := strconv.Atoi(idStr)
+func UpdatePost(ctx *fasthttp.RequestCtx) {
+	id, err := strconv.Atoi(ctx.UserValue("id").(string))
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "UpdatePost",
+		}).Error(err)
+		setStatus(ctx, http.StatusBadRequest)
+		return
+	}
+
 	post := &models.Post{}
-	if err := json.Unmarshal(ctx.PostBody(), post); err != nil {
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		ctx.Write([]byte(`{"message": "` + "unmarshal not ok : " + err.Error() + `"}`))
+	if err := unmarshall(ctx, post); err != nil {
 		return
 	}
+
 	post.ID = id
-	err := m.pUC.Update(post)
-	switch err {
-	case nil:
-		resp, _ := post.MarshalJSON()
-		utils.Send(200, ctx, resp)
-	default:
-		utils.Send(404, ctx, utils.MustMarshalError(err))
+	if err := app.Post.Update(post); err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
 	}
+	send(ctx, http.StatusOK, post)
 }
 
-func (m *PostManager) GetByID(ctx *fasthttp.RequestCtx) {
-	ctx.SetContentType("application/json")
-	related := ctx.QueryArgs().Peek("related")
-	idStr := ctx.UserValue("id").(string)
-	id, _ := strconv.Atoi(idStr)
-	details := &models.PostDetails{}
-	var err error
-	details.Post, err = m.pUC.SelectPostByID(id)
+func GetPostDetails(ctx *fasthttp.RequestCtx) {
+	id, err := strconv.Atoi(ctx.UserValue("id").(string))
 	if err != nil {
-		ctx.SetStatusCode(404)
-		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
-		return
-	}
-	user, err := m.uUC.SelectByNickname(details.Post.Author)
-	details.User = &user
-	if err != nil {
-		ctx.SetStatusCode(404)
-		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
-		return
-	}
-	details.Thread, err = m.tUC.SelectByID(details.Post.Thread)
-	if err != nil {
-		ctx.SetStatusCode(404)
-		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
-		return
-	}
-	details.Forum, err = m.fUC.SelectBySlug(details.Thread.Forum)
-	if err != nil {
-		ctx.SetStatusCode(404)
-		ctx.Write([]byte(`{"message": "` + err.Error() + `"}`))
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetPost",
+		}).Error(err)
+		setStatus(ctx, http.StatusBadRequest)
 		return
 	}
 
+	details := &models.PostDetails{}
+	details.Post, err = app.Post.SelectPostByID(id)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
+	user, err := app.User.SelectByNickname(details.Post.Author)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+	details.Author = &user
+
+	details.Thread, err = app.Thread.SelectByID(details.Post.Thread)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
+	details.Forum, err = app.Forum.SelectBySlug(details.Thread.Forum)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
+	related := ctx.QueryArgs().Peek("related")
 	if !bytes.Contains(related, []byte("user")) {
-		details.User = nil
+		details.Author = nil
 	}
 	if !bytes.Contains(related, []byte("forum")) {
 		details.Forum = nil
@@ -126,26 +111,21 @@ func (m *PostManager) GetByID(ctx *fasthttp.RequestCtx) {
 	if !bytes.Contains(related, []byte("thread")) {
 		details.Thread = nil
 	}
-
-	resp, _ := details.MarshalJSON()
-	ctx.Write(resp)
-	ctx.SetStatusCode(200)
+	send(ctx, http.StatusOK, details)
 }
 
-func (m *PostManager) GetPosts(ctx *fasthttp.RequestCtx) {
-	params := utils.MustGetParams(ctx)
-	slug := ctx.UserValue("slugOrID").(string)
-	thread, err := m.tUC.SelectBySlugOrID(slug)
+func GetPosts(ctx *fasthttp.RequestCtx) {
+	thread, err := app.Thread.SelectBySlugOrID(ctx.UserValue("slug").(string))
 	if err != nil {
-		utils.Send(404, ctx, utils.MustMarshalError(err))
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
 		return
 	}
-	posts, err := m.pUC.GetPosts(thread.ID, params.Desc, params.Since, params.Limit, params.Sort)
-	switch err {
-	case nil:
-		resp, _ := json.Marshal(posts)
-		utils.Send(200, ctx, resp)
-	default:
-		utils.Send(404, ctx, utils.MustMarshalError(err))
+
+	params := getParams(ctx)
+	posts, err := app.Post.GetPosts(thread.ID, params.Desc, params.Since, params.Limit, params.Sort)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
 	}
+	send(ctx, http.StatusOK, posts)
 }

@@ -1,23 +1,53 @@
 
-ALTER SYSTEM SET checkpoint_completion_target = '0.9';
-ALTER SYSTEM SET wal_buffers = '6912kB';
-ALTER SYSTEM SET default_statistics_target = '100';
-ALTER SYSTEM SET effective_io_concurrency = '200';
-ALTER SYSTEM SET seq_page_cost = '0.1';
-ALTER SYSTEM SET random_page_cost = '0.1';
-ALTER SYSTEM SET max_worker_processes = '4';
-ALTER SYSTEM SET max_parallel_workers_per_gather = '2';
-ALTER SYSTEM SET max_parallel_workers = '4';
-ALTER SYSTEM SET max_parallel_maintenance_workers = '2';
+ALTER SYSTEM
+SET checkpoint_completion_target
+= '0.9';
 
-CREATE EXTENSION IF NOT EXISTS citext;
+ALTER SYSTEM
+SET wal_buffers
+= '6912kB';
+
+ALTER SYSTEM
+SET default_statistics_target
+= '100';
+
+ALTER SYSTEM
+SET effective_io_concurrency
+= '200';
+
+ALTER SYSTEM
+SET seq_page_cost
+= '0.1';
+
+ALTER SYSTEM
+SET random_page_cost
+= '0.1';
+
+ALTER SYSTEM
+SET max_worker_processes
+= '4';
+
+ALTER SYSTEM
+SET max_parallel_workers_per_gather
+= '2';
+
+ALTER SYSTEM
+SET max_parallel_workers
+= '4';
+
+ALTER SYSTEM
+SET max_parallel_maintenance_workers
+= '2';
+
+CREATE EXTENSION
+IF NOT EXISTS citext;
 
 CREATE UNLOGGED TABLE users
 (
-    nickname CITEXT PRIMARY KEY NOT NULL,
-    email    CITEXT UNIQUE      NOT NULL,
-    about    TEXT               NOT NULL,
-    fullname TEXT               NOT NULL
+    nickname CITEXT COLLATE "C" PRIMARY KEY NOT NULL UNIQUE,
+    email    CITEXT COLLATE "C"             NOT NULL UNIQUE,
+    about    TEXT                           NOT NULL,
+    fullname TEXT                           NOT NULL
 );
 
 CREATE UNIQUE INDEX ON users (nickname, email);
@@ -26,12 +56,13 @@ CREATE UNIQUE INDEX ON users (nickname DESC);
 
 CREATE UNLOGGED TABLE forums
 (
-    slug     CITEXT PRIMARY KEY                                   NOT NULL,
-    title    TEXT                                                 NOT NULL,
-    nickname CITEXT REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
-    posts    INTEGER DEFAULT 0                                    NOT NULL,
-    threads  INTEGER DEFAULT 0                                    NOT NULL
+    slug     CITEXT COLLATE "C" PRIMARY KEY                                   NOT NULL,
+    title    TEXT                                                             NOT NULL,
+    nickname CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    posts    INTEGER DEFAULT 0                                                NOT NULL,
+    threads  INTEGER DEFAULT 0                                                NOT NULL
 );
+
 
 CREATE UNLOGGED TABLE forum_users
 (
@@ -45,52 +76,52 @@ CREATE INDEX ON forum_users (author);
 
 CREATE UNLOGGED TABLE threads
 (
-    author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
-    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE     NOT NULL,
-    id         SERIAL PRIMARY KEY                                    NOT NULL,
-    message    TEXT                                                  NOT NULL,
+    author     CITEXT REFERENCES users(nickname) ON DELETE CASCADE    NOT NULL,
+    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  NOT NULL,
+    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE      NOT NULL,
+    id         SERIAL PRIMARY KEY                                     NOT NULL,
+    message    TEXT                                                   NOT NULL,
     slug       CITEXT,
-    title      TEXT                                                  NOT NULL,
-    votes      INTEGER                     DEFAULT 0                 NOT NULL
+    title      TEXT                                                   NOT NULL,
+    votes      INTEGER                     DEFAULT 0                  NOT NULL
 );
 
-CREATE INDEX ON threads(slug, author);
-CREATE INDEX ON threads(forum_slug, created ASC);
-CREATE INDEX ON threads(forum_slug, created DESC);
-CREATE INDEX ON threads(slug, id);
-CREATE INDEX ON threads(id, forum_slug);
-CREATE INDEX ON threads(slug, id, forum_slug);
+CREATE INDEX ON threads (slug, author);
+CREATE INDEX ON threads (forum_slug, created ASC);
+CREATE INDEX ON threads (forum_slug, created DESC);
+CREATE INDEX ON threads (slug, id);
+CREATE INDEX ON threads (id, forum_slug);
+CREATE INDEX ON threads (slug, id, forum_slug);
 
 CREATE UNLOGGED TABLE posts
 (
     author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
     created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE     NOT NULL,
+    forum_slug CITEXT REFERENCES forums (slug)    ON DELETE CASCADE  NOT NULL,
     id         SERIAL PRIMARY KEY                                    NOT NULL,
-    edited     BOOL                        DEFAULT 'false'           NOT NULL,
+    edited     BOOL DEFAULT 'false'                                  NOT NULL,
     message    TEXT                                                  NOT NULL,
     parent     INTEGER                                               NOT NULL,
     thread     INTEGER REFERENCES threads (id) ON DELETE CASCADE     NOT NULL,
-    path       INTEGER ARRAY               DEFAULT '{}'              NOT NULL
+    path       INTEGER ARRAY DEFAULT '{}'                            NOT NULL
 );
 
-CREATE UNIQUE INDEX ON posts(id, thread);
-CREATE UNIQUE INDEX ON posts(id, author);
-CREATE        INDEX ON posts(thread, path DESC);
-CREATE        INDEX ON posts(thread, path ASC);
-CREATE        INDEX ON posts(thread, id DESC);
-CREATE        INDEX ON posts(thread, id ASC);
+CREATE UNIQUE INDEX ON posts (id, thread);
+CREATE UNIQUE INDEX ON posts (id, author);
+CREATE        INDEX ON posts (thread, path DESC);
+CREATE        INDEX ON posts (thread, path ASC);
+CREATE        INDEX ON posts (thread, id DESC);
+CREATE        INDEX ON posts (thread, id ASC);
 
 CREATE UNLOGGED TABLE votes
 (
     nickname  CITEXT  REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
     thread_id INTEGER REFERENCES threads (id)     ON DELETE CASCADE NOT NULL,
-    vote      SMALLINT                                              NOT NULL,
+    vote      SMALLINT NOT NULL,
     PRIMARY KEY (thread_id, nickname)
 );
 
-CREATE UNIQUE INDEX ON votes(thread_id, nickname);
+CREATE UNIQUE INDEX ON votes (thread_id, nickname);
 CREATE        INDEX ON threads (slug, id);
 
 -- PATH TO POST UPDATE

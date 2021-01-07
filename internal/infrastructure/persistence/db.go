@@ -31,21 +31,14 @@ func New(conf *DBConfig) (*repository.App, error) {
 		MaxConnections: conf.MaxConnections,
 		AcquireTimeout: conf.AcquireTimeout,
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	ar := repository.App{
+	return &repository.App{
 		User:   newUser(dbConn),
 		Forum:  newForum(dbConn),
 		Thread: newThread(dbConn),
 		Post:   newPost(dbConn),
-	}
-
-	if err = ar.Thread.Prepare(); err != nil {
-		return nil, err
-	}
-
-	if err = ar.Post.Prepare(); err != nil {
-		return nil, err
-	}
-
-	return &ar, nil
+	}, nil
 }

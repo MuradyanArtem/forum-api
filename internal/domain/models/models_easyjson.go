@@ -37,11 +37,11 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels(in *jlexer.Lexer, out *V
 		}
 		switch key {
 		case "voice":
-			out.Voice = int32(in.Int32())
+			out.Voice = int(in.Int())
 		case "nickname":
 			out.Nickname = string(in.String())
 		case "thread":
-			out.Thread = int64(in.Int64())
+			out.Thread = int(in.Int())
 		default:
 			in.SkipRecursive()
 		}
@@ -59,7 +59,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels(out *jwriter.Writer, in 
 	{
 		const prefix string = ",\"voice\":"
 		out.RawString(prefix[1:])
-		out.Int32(int32(in.Voice))
+		out.Int(int(in.Voice))
 	}
 	{
 		const prefix string = ",\"nickname\":"
@@ -69,7 +69,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels(out *jwriter.Writer, in 
 	if in.Thread != 0 {
 		const prefix string = ",\"thread\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Thread))
+		out.Int(int(in.Thread))
 	}
 	out.RawByte('}')
 }
@@ -336,7 +336,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels4(in *jlexer.Lexer, out *
 		}
 		switch key {
 		case "id":
-			out.ID = int64(in.Int64())
+			out.ID = int(in.Int())
 		case "slug":
 			out.Slug = string(in.String())
 		case "title":
@@ -348,9 +348,11 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels4(in *jlexer.Lexer, out *
 		case "author":
 			out.Author = string(in.String())
 		case "created":
-			out.Created = string(in.String())
+			if data := in.Raw(); in.Ok() {
+				in.AddError((out.Created).UnmarshalJSON(data))
+			}
 		case "votes":
-			out.Votes = int64(in.Int64())
+			out.Votes = int(in.Int())
 		default:
 			in.SkipRecursive()
 		}
@@ -368,7 +370,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels4(out *jwriter.Writer, in
 	{
 		const prefix string = ",\"id\":"
 		out.RawString(prefix[1:])
-		out.Int64(int64(in.ID))
+		out.Int(int(in.ID))
 	}
 	if in.Slug != "" {
 		const prefix string = ",\"slug\":"
@@ -395,15 +397,15 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels4(out *jwriter.Writer, in
 		out.RawString(prefix)
 		out.String(string(in.Author))
 	}
-	if in.Created != "" {
+	if true {
 		const prefix string = ",\"created\":"
 		out.RawString(prefix)
-		out.String(string(in.Created))
+		out.Raw((in.Created).MarshalJSON())
 	}
 	{
 		const prefix string = ",\"votes\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Votes))
+		out.Int(int(in.Votes))
 	}
 	out.RawByte('}')
 }
@@ -451,13 +453,13 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels5(in *jlexer.Lexer, out *
 		}
 		switch key {
 		case "forum":
-			out.Forum = int64(in.Int64())
+			out.Forum = int(in.Int())
 		case "post":
-			out.Post = int64(in.Int64())
+			out.Post = int(in.Int())
 		case "thread":
-			out.Thread = int64(in.Int64())
+			out.Thread = int(in.Int())
 		case "user":
-			out.User = int64(in.Int64())
+			out.User = int(in.Int())
 		default:
 			in.SkipRecursive()
 		}
@@ -475,22 +477,22 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels5(out *jwriter.Writer, in
 	{
 		const prefix string = ",\"forum\":"
 		out.RawString(prefix[1:])
-		out.Int64(int64(in.Forum))
+		out.Int(int(in.Forum))
 	}
 	{
 		const prefix string = ",\"post\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Post))
+		out.Int(int(in.Post))
 	}
 	{
 		const prefix string = ",\"thread\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Thread))
+		out.Int(int(in.Thread))
 	}
 	{
 		const prefix string = ",\"user\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.User))
+		out.Int(int(in.User))
 	}
 	out.RawByte('}')
 }
@@ -584,7 +586,7 @@ func (v *PostSlice) UnmarshalJSON(data []byte) error {
 func (v *PostSlice) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels6(l, v)
 }
-func easyjsonD2b7633eDecodeForumApiInternalDomainModels7(in *jlexer.Lexer, out *PostFull) {
+func easyjsonD2b7633eDecodeForumApiInternalDomainModels7(in *jlexer.Lexer, out *PostDetails) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -653,7 +655,7 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels7(in *jlexer.Lexer, out *
 		in.Consumed()
 	}
 }
-func easyjsonD2b7633eEncodeForumApiInternalDomainModels7(out *jwriter.Writer, in PostFull) {
+func easyjsonD2b7633eEncodeForumApiInternalDomainModels7(out *jwriter.Writer, in PostDetails) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -685,26 +687,26 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels7(out *jwriter.Writer, in
 }
 
 // MarshalJSON supports json.Marshaler interface
-func (v PostFull) MarshalJSON() ([]byte, error) {
+func (v PostDetails) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels7(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
-func (v PostFull) MarshalEasyJSON(w *jwriter.Writer) {
+func (v PostDetails) MarshalEasyJSON(w *jwriter.Writer) {
 	easyjsonD2b7633eEncodeForumApiInternalDomainModels7(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
-func (v *PostFull) UnmarshalJSON(data []byte) error {
+func (v *PostDetails) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels7(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *PostFull) UnmarshalEasyJSON(l *jlexer.Lexer) {
+func (v *PostDetails) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonD2b7633eDecodeForumApiInternalDomainModels7(l, v)
 }
 func easyjsonD2b7633eDecodeForumApiInternalDomainModels8(in *jlexer.Lexer, out *Post) {
@@ -727,11 +729,13 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels8(in *jlexer.Lexer, out *
 		}
 		switch key {
 		case "id":
-			out.ID = int64(in.Int64())
+			out.ID = int(in.Int())
 		case "author":
 			out.Author = string(in.String())
 		case "created":
-			out.Created = string(in.String())
+			if data := in.Raw(); in.Ok() {
+				in.AddError((out.Created).UnmarshalJSON(data))
+			}
 		case "forum":
 			out.Forum = string(in.String())
 		case "isEdited":
@@ -739,9 +743,9 @@ func easyjsonD2b7633eDecodeForumApiInternalDomainModels8(in *jlexer.Lexer, out *
 		case "message":
 			out.Message = string(in.String())
 		case "parent":
-			out.Parent = int64(in.Int64())
+			out.Parent = int(in.Int())
 		case "thread":
-			out.Thread = int64(in.Int64())
+			out.Thread = int(in.Int())
 		default:
 			in.SkipRecursive()
 		}
@@ -759,7 +763,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels8(out *jwriter.Writer, in
 	{
 		const prefix string = ",\"id\":"
 		out.RawString(prefix[1:])
-		out.Int64(int64(in.ID))
+		out.Int(int(in.ID))
 	}
 	{
 		const prefix string = ",\"author\":"
@@ -769,7 +773,7 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels8(out *jwriter.Writer, in
 	{
 		const prefix string = ",\"created\":"
 		out.RawString(prefix)
-		out.String(string(in.Created))
+		out.Raw((in.Created).MarshalJSON())
 	}
 	{
 		const prefix string = ",\"forum\":"
@@ -789,12 +793,12 @@ func easyjsonD2b7633eEncodeForumApiInternalDomainModels8(out *jwriter.Writer, in
 	{
 		const prefix string = ",\"parent\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Parent))
+		out.Int(int(in.Parent))
 	}
 	{
 		const prefix string = ",\"thread\":"
 		out.RawString(prefix)
-		out.Int64(int64(in.Thread))
+		out.Int(int(in.Thread))
 	}
 	out.RawByte('}')
 }

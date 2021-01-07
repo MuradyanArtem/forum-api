@@ -2,7 +2,7 @@ package models
 
 //easyjson:json
 type Vote struct {
-	Voice    int32  `json:"voice"`
+	Voice    int    `json:"voice"`
 	Nickname string `json:"nickname"`
-	Thread   int64  `json:"thread,omitempty"`
+	Thread   int    `json:"thread,omitempty"`
 }

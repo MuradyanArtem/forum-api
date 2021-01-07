@@ -1,354 +1,144 @@
 package http
 
 import (
-	"errors"
-	"fmt"
-	"forum-api/internal/app"
-	"forum-api/internal/infrastructure"
-	"io/ioutil"
 	"net/http"
 
 	"forum-api/internal/domain/models"
+	"forum-api/internal/infrastructure"
 
-	json "github.com/mailru/easyjson"
 	"github.com/sirupsen/logrus"
-
-	"github.com/gorilla/mux"
+	"github.com/valyala/fasthttp"
 )
 
-type Thread struct {
-	thread *app.Thread
-	post   *app.Post
-}
-
-func newThread(thread *app.Thread, post *app.Post) *Thread {
-	return &Thread{
-		thread,
-		post,
-	}
-}
-
-func (t *Thread) GetThreadInfo(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
+func CreateThread(ctx *fasthttp.RequestCtx) {
 	thread := &models.Thread{}
-	thread.Slug = mux.Vars(r)["slug"]
+	if err := unmarshall(ctx, thread); err != nil {
+		return
+	}
 
-	if err := t.thread.GetThreadInfo(thread); err != nil {
+	var err error
+	thread.Forum = ctx.UserValue("slug").(string)
+	thread.Forum, err = app.Forum.SelectForumWithCase(thread.Forum)
+	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "GetThreadInfo",
+			"func": "CreateThread",
 		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
 
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-			})
-		if err != nil {
+	thread.Author, err = app.User.SelectNicknameWithCase(thread.Author)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "CreateThread",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
+	threadInBase := models.Thread{}
+	if thread.Slug != "" {
+		threadInBase, err := app.Thread.SelectThreadBySlug(thread.Slug)
+		if err == nil {
 			logrus.WithFields(logrus.Fields{
 				"pack": "http",
-				"func": "GetThreadInfo",
+				"func": "CreateThread",
 			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
+			send(ctx, http.StatusConflict, threadInBase)
 			return
 		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
-		return
 	}
 
-	res, err := json.Marshal(thread)
-	if err != nil {
+	if err := app.Thread.InsertThread(thread); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "GetThreadInfo",
+			"func": "CreateThread",
 		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+		switch err {
+		case infrastructure.ErrConflict:
+			send(ctx, http.StatusConflict, threadInBase)
+		default:
+			send(ctx, http.StatusInternalServerError, models.Message{Message: err.Error()})
+		}
+	}
+	send(ctx, http.StatusCreated, thread)
 }
 
-func (t *Thread) CreateVote(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
+func GetThreadsByForum(ctx *fasthttp.RequestCtx) {
+	slug := ctx.UserValue("slug").(string)
+	params := getParams(ctx)
 
-	data, err := ioutil.ReadAll(r.Body)
+	if _, err := app.Forum.SelectForumWithCase(slug); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetThreadsByForum",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
+	threads, err := app.Thread.SelectThreadsByForum(slug, params.Limit, params.Since, params.Desc)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "CreateVote",
+			"func": "GetThreadsByForum",
 		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
 	}
-	defer r.Body.Close()
+	send(ctx, http.StatusOK, threads)
+}
 
+func GetThreadDetails(ctx *fasthttp.RequestCtx) {
+	slug := ctx.UserValue("slug").(string)
+	thread, err := app.Thread.SelectBySlugOrID(slug)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetThreadDetails",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+	send(ctx, http.StatusOK, thread)
+}
+
+func UpdateThread(ctx *fasthttp.RequestCtx) {
+	slug := ctx.UserValue("slug").(string)
+	thread := &models.Thread{}
+	if err := unmarshall(ctx, thread); err != nil {
+		return
+	}
+
+	if err := app.Thread.UpdateBySlugOrID(slug, thread); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "UpdateThread",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+	send(ctx, http.StatusOK, thread)
+}
+
+func UpdateVote(ctx *fasthttp.RequestCtx) {
+	slug := ctx.UserValue("slug").(string)
 	vote := &models.Vote{}
-	if err := json.Unmarshal(data, vote); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
+	if err := unmarshall(ctx, vote); err != nil {
 		return
 	}
 
-	thread := &models.Thread{}
-	thread.Slug = mux.Vars(r)["slug"]
-
-	if err := t.thread.CreateVote(thread, vote); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-			})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "CreateVote",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
-		return
-	}
-
-	res, err := json.Marshal(thread)
+	thread, err := app.Thread.Vote(*vote, slug)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "CreateVote",
+			"func": "UpdateVote",
 		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (t *Thread) UpdateThread(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	defer r.Body.Close()
-
-	thread := &models.Thread{}
-	thread.Slug = mux.Vars(r)["slug"]
-
-	if err := json.Unmarshal(data, thread); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdateThread",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if err := t.thread.UpdateThread(thread); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdateThread",
-		}).Error(err)
-
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-			})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "UpdateThread",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
-		return
-	}
-
-	res, err := json.Marshal(thread)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdateThread",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (t *Thread) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	thread := &models.Thread{}
-	thread.Slug = mux.Vars(r)["slug"]
-
-	posts, err := t.thread.GetThreadPosts(
-		thread,
-		r.FormValue("desc"),
-		r.FormValue("sort"),
-		r.FormValue("limit"),
-		r.FormValue("since"),
-	)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetThreadPosts",
-		}).Error(err)
-
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-			})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetThreadPosts",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
-		return
-	}
-
-	res, err := json.Marshal(posts)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetThreadPosts",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-	return
-}
-
-func (t *Thread) CreatePosts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	defer r.Body.Close()
-
-	posts := &models.Posts{}
-	if err := json.Unmarshal(data, posts); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreatePosts",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	thread := &models.Thread{}
-	thread.Slug = mux.Vars(r)["slug"]
-
-	if err := t.post.CreatePosts(*posts, thread); err != nil {
-		if errors.Is(err, infrastructure.ParentNotExist) {
-			res, err := json.Marshal(
-				&models.Message{
-					Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-				})
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"pack": "http",
-					"func": "CreatePosts",
-				}).Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(res)
-				return
-			}
-
-			w.WriteHeader(http.StatusConflict)
-			w.Write(res)
-			return
-		}
-
-		if errors.Is(err, infrastructure.ThreadNotExist) || errors.Is(err, infrastructure.UserNotExist) {
-			res, err := json.Marshal(
-				&models.Message{
-					Message: fmt.Sprintf("Can't find user with id %d", thread.ID),
-				})
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"pack": "http",
-					"func": "CreatePosts",
-				}).Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(res)
-				return
-			}
-		}
-
-		res, err := json.Marshal(&models.Message{Message: err.Error()})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "CreatePosts",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	res, err := json.Marshal(posts)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreatePosts",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(res)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	w.Write(res)
+	send(ctx, http.StatusOK, thread)
 }

@@ -2,217 +2,104 @@ package http
 
 import (
 	"errors"
-	"fmt"
-	"forum-api/internal/app"
 	"forum-api/internal/domain/models"
 	"forum-api/internal/infrastructure"
-	"io/ioutil"
 	"net/http"
 
-	json "github.com/mailru/easyjson"
-
-	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"github.com/valyala/fasthttp"
 )
 
-type User struct {
-	user *app.User
-}
-
-func newUser(user *app.User) *User {
-	return &User{
-		user,
-	}
-}
-
-func (u *User) AddUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	defer r.Body.Close()
-
+func CreateUser(ctx *fasthttp.RequestCtx) {
 	user := &models.User{}
-	user.Nickname = mux.Vars(r)["nickname"]
-
-	if err := json.Unmarshal(data, user); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "AddUser",
-		}).Error(err)
-
-		w.WriteHeader(http.StatusBadRequest)
+	if err := unmarshall(ctx, user); err != nil {
 		return
 	}
 
-	if users, err := u.user.CreateUser(user); err != nil {
+	user.Nickname = ctx.UserValue("nickname").(string)
+	if user.Nickname == "" {
+		setStatus(ctx, http.StatusBadRequest)
+		return
+	}
+
+	if err := app.User.Insert(user); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
-			"func": "AddUser",
+			"func": "CreateUser",
 		}).Error(err)
 
-		if users == nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+		switch err {
+		case infrastructure.ErrConflict:
+			usersAlreadyExist, err := app.User.SelectByEmailOrNickname(user.Nickname, user.Email)
+			if err != nil {
+				send(ctx, http.StatusBadRequest, models.Message{Message: err.Error()})
+				return
+			}
+			send(ctx, http.StatusConflict, usersAlreadyExist)
+
+		default:
+			send(ctx, http.StatusInternalServerError, models.Message{Message: err.Error()})
 		}
-
-		res, err := json.Marshal(users)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		w.WriteHeader(http.StatusConflict)
-		w.Write(res)
 		return
 	}
-
-	res, err := json.Marshal(user)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "AddUser",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	w.Write(res)
+	send(ctx, http.StatusCreated, user)
 }
 
-func (u *User) GetUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
+func UpdateUser(ctx *fasthttp.RequestCtx) {
 	user := &models.User{}
-	user.Nickname = mux.Vars(r)["nickname"]
-
-	if err := u.user.GetUser(user); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetUser",
-		}).Error(err)
-
-		res, err := json.Marshal(
-			&models.Message{
-				Message: fmt.Sprintf("Can't find user with id %d", user.Nickname),
-			})
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"pack": "http",
-				"func": "GetUser",
-			}).Error(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
+	if err := unmarshall(ctx, user); err != nil {
 		return
 	}
 
-	res, err := json.Marshal(user)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetUser",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
+	user.Nickname = ctx.UserValue("nickname").(string)
+	if user.Nickname == "" {
+		setStatus(ctx, http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
-}
-
-func (u *User) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-
-	data, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateVote",
-		}).Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	defer r.Body.Close()
-
-	user := &models.User{}
-	user.Nickname = mux.Vars(r)["nickname"]
-
-	if err := json.Unmarshal(data, user); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetUser",
-		}).Error(err)
-
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	if err := u.user.UpdateUser(user); err != nil {
+	if err := app.User.Update(user); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "UpdateUser",
 		}).Error(err)
 
-		if errors.Is(err, infrastructure.UserNotExist) {
-			res, err := json.Marshal(
-				&models.Message{
-					Message: fmt.Sprintf("Can't find user with id %d", user.Nickname),
-				})
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"pack": "http",
-					"func": "UpdateUser",
-				}).Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
+		switch err {
+		case infrastructure.ErrConflict:
+			send(ctx, http.StatusConflict, models.Message{Message: err.Error()})
 
-			w.WriteHeader(http.StatusNotFound)
-			w.Write(res)
-			return
+		case infrastructure.ErrNotExists:
+			send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+
+		default:
+			send(ctx, http.StatusInternalServerError, models.Message{Message: err.Error()})
 		}
-
-		if errors.Is(err, infrastructure.UserNotUpdated) {
-			res, err := json.Marshal(
-				&models.Message{
-					Message: fmt.Sprintf("This email is already registered by user: %d", user.Nickname),
-				})
-			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"pack": "http",
-					"func": "UpdateUser",
-				}).Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusConflict)
-			w.Write(res)
-			return
-		}
+		return
 	}
+	send(ctx, http.StatusOK, user)
+}
 
-	res, err := json.Marshal(user)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdateUser",
-		}).Error(err)
-		w.WriteHeader(http.StatusInternalServerError)
+func GetUser(ctx *fasthttp.RequestCtx) {
+	user := &models.User{}
+	user.Nickname = ctx.UserValue("nickname").(string)
+	if user.Nickname == "" {
+		setStatus(ctx, http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
+	userInDB, err := app.User.SelectByNickname(user.Nickname)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetProfile",
+		}).Error(err)
+
+		if errors.Is(err, infrastructure.ErrNotExists) {
+			send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+			return
+		}
+
+		send(ctx, http.StatusInternalServerError, models.Message{Message: err.Error()})
+		return
+	}
+	send(ctx, http.StatusOK, userInDB)
 }

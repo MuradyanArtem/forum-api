@@ -1,4 +1,4 @@
-package app
+package tpforum
 
 import (
 	"forum-api/internal/domain/models"
@@ -15,7 +15,7 @@ func newPost(post repository.Post) *Post {
 	}
 }
 
-func (p *Post) InsertPost(posts *models.PostSlice, forum string, id int) error {
+func (p *Post) InsertPost(posts []models.Post, forum string, id int) error {
 	return p.post.InsertPost(posts, forum, id)
 }
 

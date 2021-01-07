@@ -22,7 +22,7 @@ func (p *Post) SelectThreadByPostID(id int) (int, error) {
 	return tID, err
 }
 
-func (p *Post) InsertPost(posts []*models.Post, forum string, id int) error {
+func (p *Post) InsertPost(posts []models.Post, forum string, id int) error {
 	if len(posts) == 0 {
 		return nil
 	}
@@ -56,8 +56,8 @@ func (p *Post) InsertPost(posts []*models.Post, forum string, id int) error {
 		}
 	}
 	if rows.Err() != nil {
-		switch infrastructure.ErrorCode(rows.Err()) {
-		case infrastructure.PgConflict:
+		switch infrastructure.ErrCode(rows.Err()) {
+		case infrastructure.PgErrConflict:
 			return infrastructure.ErrConflict
 		default:
 			return rows.Err()
@@ -89,7 +89,7 @@ func (p *Post) Update(post *models.Post) error {
 	return err
 }
 
-func (p *Post) GetPosts(threadID int, desc bool, since string, limit int, sort string) ([]models.Post, error) {
+func (r *Post) GetPosts(threadID int, desc bool, since string, limit int, sort string) (models.PostSlice, error) {
 	posts := []models.Post{}
 	query := ""
 
@@ -167,7 +167,7 @@ func (p *Post) GetPosts(threadID int, desc bool, since string, limit int, sort s
 					"FROM posts WHERE thread = $1 ORDER BY id ASC LIMIT $2"
 			}
 		}
-		rows, err = p.db.Query(query, threadID, limit)
+		rows, err = r.db.Query(query, threadID, limit)
 	}
 
 	if err != nil {
@@ -175,20 +175,12 @@ func (p *Post) GetPosts(threadID int, desc bool, since string, limit int, sort s
 	}
 
 	for rows.Next() {
-		post := &models.Post{}
-		err := rows.Scan(
-			&post.ID,
-			&post.Author,
-			&post.Forum,
-			&post.Thread,
-			&post.Message,
-			&post.Parent,
-			&post.IsEdited,
-			&post.Created)
+		p := &models.Post{}
+		err := rows.Scan(&p.ID, &p.Author, &p.Forum, &p.Thread, &p.Message, &p.Parent, &p.IsEdited, &p.Created)
 		if err != nil {
 			return posts, err
 		}
-		posts = append(posts, *post)
+		posts = append(posts, *p)
 	}
 	return posts, nil
 }

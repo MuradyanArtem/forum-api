@@ -1,4 +1,4 @@
-package app
+package tpforum
 
 import (
 	"forum-api/internal/domain/models"
@@ -24,13 +24,14 @@ func (t *Thread) SelectThreadsByForum(slug string, limit int, since string, desc
 	return t.thread.SelectThreadsByForum(slug, limit, since, desc)
 }
 
-func (t *Thread) SelectBySlugOrID(slugOrID string) (*models.Thread, error) {
-	value, err := strconv.Atoi(slugOrID)
+func (t *Thread) SelectBySlugOrID(slug string) (*models.Thread, error) {
+	value, err := strconv.Atoi(slug)
 	if err != nil {
-		return t.thread.SelectThreadBySlug(slugOrID)
+		return t.thread.SelectThreadBySlug(slug)
 	}
 	return t.thread.SelectThreadByID(value)
 }
+
 func (t *Thread) SelectByID(id int) (*models.Thread, error) {
 	return t.thread.SelectThreadByID(id)
 }
@@ -38,6 +39,7 @@ func (t *Thread) SelectByID(id int) (*models.Thread, error) {
 func (t *Thread) SelectThreadBySlug(slug string) (*models.Thread, error) {
 	return t.thread.SelectThreadBySlug(slug)
 }
+
 func (t *Thread) Update(thread *models.Thread) error {
 	return t.thread.Update(thread)
 }

@@ -16,9 +16,9 @@ func newForum(db *pgx.ConnPool) *Forum {
 }
 
 func (f *Forum) Insert(forum *models.Forum) error {
-	if err := f.db.QueryRow("INSERT INTO forums (slug, title, nickname) "+
-		"VALUES ($1, $2, $3) "+
-		"RETURNING posts,threads", &forum.Slug, &forum.Title, &forum.User).Scan(&forum.Posts, &forum.Threads); err != nil {
+	if err := f.db.QueryRow("INSERT INTO forums (slug, title, nickname) " +
+		"VALUES ($1, $2, (select nickname from users where nickname = $3)) "+
+		"RETURNING nickname", &forum.Slug, &forum.Title, &forum.User).Scan(&forum.User); err != nil {
 		switch infrastructure.ErrCode(err) {
 		case infrastructure.PgErrUniqueViolation:
 			return infrastructure.ErrConflict
@@ -39,8 +39,8 @@ func (f *Forum) SelectBySlug(slug string) (*models.Forum, error) {
 	return forum, nil
 }
 
-func (f *Forum) GetUsers(slug string, desc bool, since string, limit int) (models.Users, error) {
-	users := models.Users{}
+func (f *Forum) GetUsersByForum(slug string, desc bool, since string, limit int) (models.UserSlice, error) {
+	users := models.UserSlice{}
 	query := "SELECT users.about, users.email, users.fullname, users.nickname " +
 		"FROM forum_users " +
 		"JOIN users on users.nickname = forum_users.author " +

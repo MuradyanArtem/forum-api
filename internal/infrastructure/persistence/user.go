@@ -16,18 +16,17 @@ func newUser(db *pgx.ConnPool) *User {
 }
 
 func (u *User) Insert(user *models.User) error {
-	_, err := u.db.Exec("INSERT INTO users "+
+	if _, err := u.db.Exec("INSERT INTO users (nickname, "+
+		"email, about, fullname) "+
 		"VALUES ($1, $2, $3, $4)",
 		user.Nickname,
 		user.Email,
 		user.About,
-		user.Fullname)
-	switch err {
-	case nil:
-		return nil
-	default:
+		user.Fullname); err != nil {
 		return infrastructure.ErrConflict
 	}
+
+	return nil
 }
 
 func (u *User) Update(user *models.User) error {
@@ -70,7 +69,7 @@ func (u *User) SelectByNickname(nickname string) (models.User, error) {
 	}
 }
 
-func (u *User) SelectByEmailOrNickname(nickname string, email string) (models.Users, error) {
+func (u *User) SelectByEmailOrNickname(nickname string, email string) (models.UserSlice, error) {
 	users := []models.User{}
 	rows, err := u.db.Query("SELECT * FROM users "+
 		"WHERE nickname = $1 OR email = $2 LIMIT 2", nickname, email)

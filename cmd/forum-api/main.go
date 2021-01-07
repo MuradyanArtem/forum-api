@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"forum-api/internal/app"
+	"forum-api/internal/app/tpforum"
 	"forum-api/internal/infrastructure"
 	"forum-api/internal/infrastructure/persistence"
 	router "forum-api/internal/interfaces/http"
@@ -97,7 +97,7 @@ func main() {
 		}).Fatalln("Cannot initialise DB", err)
 	}
 
-	app := app.New(appRepo)
+	app := tpforum.New(appRepo)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "main",
@@ -105,7 +105,7 @@ func main() {
 		}).Fatalln("Cannot initialise application", err)
 	}
 
-	if err := fasthttp.ListenAndServe(fmt.Sprintf("%s:%s", srvHost, srvPort), router.New(app)); err != nil {
+	if err := fasthttp.ListenAndServe(fmt.Sprintf("%s:%s", srvHost, srvPort), router.New(app).Handler); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "main",
 			"func": "main",

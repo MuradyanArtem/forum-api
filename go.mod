@@ -3,7 +3,8 @@ module forum-api
 go 1.15
 
 require (
-	github.com/gorilla/mux v1.8.0
+	github.com/fasthttp/router v1.3.4
+	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgtype v1.6.2
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/mailru/easyjson v0.7.6

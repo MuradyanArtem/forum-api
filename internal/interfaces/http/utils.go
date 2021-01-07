@@ -1,8 +1,6 @@
 package http
 
 import (
-	"forum-api/internal/domain/models"
-	"net/http"
 	"strconv"
 
 	"github.com/mailru/easyjson"
@@ -19,12 +17,14 @@ type params struct {
 
 func getParams(req *fasthttp.RequestCtx) *params {
 	params := &params{}
-	params.Since = string(ctx.FormValue("since"))
-	params.Sort = string(ctx.FormValue("sort"))
+	params.Since = string(req.FormValue("since"))
+	params.Sort = string(req.FormValue("sort"))
 	params.Desc = false
 	if string(req.FormValue("desc")) == "true" {
 		params.Desc = true
 	}
+
+	var err error
 	params.Limit, err = strconv.Atoi(string(req.FormValue("limit")))
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
@@ -44,13 +44,11 @@ func marshall(req *fasthttp.RequestCtx, any easyjson.Marshaler) {
 		}).Error(err)
 		req.SetContentType("application/json")
 		req.SetStatusCode(fasthttp.StatusInternalServerError)
-		return err
 	}
 	req.SetBody(body)
-	return nil
 }
 
-func unmarshal(req *fasthttp.RequestCtx, any easyjson.Unmarshaler) error {
+func unmarshall(req *fasthttp.RequestCtx, any easyjson.Unmarshaler) error {
 	err := easyjson.Unmarshal(req.Request.Body(), any)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{

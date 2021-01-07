@@ -52,7 +52,7 @@ func (t *Thread) SelectThreadByID(id int) (*models.Thread, error) {
 	return thread, nil
 }
 
-func (t *Thread) SelectThreadsByForum(slug string, limit int, since string, desc bool) (models.Threads, error) {
+func (t *Thread) SelectThreadsByForum(slug string, limit int, since string, desc bool) (models.ThreadSlice, error) {
 	threads := []models.Thread{}
 
 	query := "SELECT author, created, forum_slug, id, message, slug, title, votes FROM threads WHERE forum_slug = $1 "
@@ -227,7 +227,7 @@ func (t *Thread) GetForumIDBySlug(s string) (int, string, error) {
 	return res, forum, err
 }
 
-func (r *Thread) SelectForumByThreadID(id int) (string, error) {
+func (t *Thread) SelectForumByThreadID(id int) (string, error) {
 	forum := ""
 	err := t.db.QueryRow("SELECT forum_slug FROM threads WHERE id = $1", id).Scan(&forum)
 	return forum, err

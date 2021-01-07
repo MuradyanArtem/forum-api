@@ -1,38 +1,37 @@
 package http
 
 import (
-	"forum-api/internal/app"
-	"net/http"
+	"forum-api/internal/app/usecases"
+
+	"github.com/fasthttp/router"
 )
 
-func New(app *app.App) http.Handler {
-	uh := newUser(app.User)
-	fh := newForum(app.Forum, app.Thread, app.User)
-	th := newThread(app.Thread, app.Post)
-	ph := newPost(app.Post, app.User, app.Thread, app.Forum)
-	sh := newService(app.User)
+var app *usecases.App
+
+func New(impl *usecases.App) *router.Router {
+	app = impl
 
 	r := router.New()
-	r.GET("/api/service/status", sh.GetStatus)
-	r.POST("/api/service/clear", sh.DeleteAll)
+	r.GET("/api/service/status", GetStatus)
+	r.POST("/api/service/clear", DeleteAll)
 
-	r.GET("/api/user/{nickname}/profile", m.GetProfile)
-	r.POST("/api/user/{nickname}/create", m.CreateUser)
-	r.POST("/api/user/{nickname}/profile", m.UpdateProfile)
+	r.GET("/api/user/{nickname}/profile", GetUser)
+	r.POST("/api/user/{nickname}/create", CreateUser)
+	r.POST("/api/user/{nickname}/profile", UpdateUser)
 
-	r.GET("/api/forum/{slug}/details", fh.GetDetails)
-	r.GET("/api/forum/{slug}/users", fh.GetUsersByForum)
-	r.GET("/api/forum/{slug}/threads", m.GetThreadsByForum)
-	r.POST("/api/forum/{slug}/create", m.CreateThread)
-	r.POST("/api/forum/create", fh.CreateForum)
+	r.GET("/api/forum/{slug}/details", GetForumDetails)
+	r.GET("/api/forum/{slug}/users", GetUsersByForum)
+	r.GET("/api/forum/{slug}/threads", GetThreadsByForum)
+	r.POST("/api/forum/{slug}/create", CreateThread)
+	r.POST("/api/forum/create", CreateForum)
 
-	r.GET("/api/thread/{slugOrID}/details", m.Details)
-	r.GET("/api/thread/{slugOrID}/posts", m.GetPosts)
-	r.POST("/api/thread/{slugOrID}/details", m.Update)
-	r.POST("/api/thread/{slugOrID}/vote", m.Vote)
-	r.POST("/api/thread/{slugOrID}/create", m.Create)
+	r.GET("/api/thread/{slug}/details", GetThreadDetails)
+	r.GET("/api/thread/{slug}/posts", GetPosts)
+	r.POST("/api/thread/{slug}/details", UpdateThread)
+	r.POST("/api/thread/{slug}/vote", UpdateVote)
+	r.POST("/api/thread/{slug}/create", CreatePost)
 
-	r.GET("/api/post/{id}/details", m.GetByID)
-	r.POST("/api/post/{id}/details", m.Update)
+	r.GET("/api/post/{id}/details", GetPostDetails)
+	r.POST("/api/post/{id}/details", UpdatePost)
 	return r
 }

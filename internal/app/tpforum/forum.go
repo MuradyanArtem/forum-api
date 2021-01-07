@@ -1,4 +1,4 @@
-package app
+package tpforum
 
 import (
 	"forum-api/internal/domain/models"

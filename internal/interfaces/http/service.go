@@ -1,7 +1,6 @@
 package http
 
 import (
-	"forum-api/internal/app"
 	"forum-api/internal/domain/models"
 	"net/http"
 
@@ -9,18 +8,8 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type Service struct {
-	user *app.User
-}
-
-func newService(user *app.User) *Service {
-	return &Service{
-		user,
-	}
-}
-
-func (s *Service) DeleteAll(ctx *fasthttp.RequestCtx) {
-	if err := s.user.DeleteAll(); err != nil {
+func DeleteAll(ctx *fasthttp.RequestCtx) {
+	if err := app.User.DeleteAll(); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "DeleteAll",
@@ -31,9 +20,9 @@ func (s *Service) DeleteAll(ctx *fasthttp.RequestCtx) {
 	setStatus(ctx, http.StatusOK)
 }
 
-func (s *Service) GetStatus(ctx *fasthttp.RequestCtx) {
+func GetStatus(ctx *fasthttp.RequestCtx) {
 	status := &models.Status{}
-	if err := s.user.GetStatus(status); err != nil {
+	if err := app.User.GetStatus(status); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"pack": "http",
 			"func": "GetStatus",
@@ -41,11 +30,5 @@ func (s *Service) GetStatus(ctx *fasthttp.RequestCtx) {
 		setStatus(ctx, http.StatusInternalServerError)
 		return
 	}
-
-	res, err := marshall(ctx, status)
-	if err != nil {
-		setStatus(ctx, http.StatusInternalServerError)
-		return
-	}
-	setStatus(ctx, http.StatusOK)
+	send(ctx, http.StatusOK, status)
 }
