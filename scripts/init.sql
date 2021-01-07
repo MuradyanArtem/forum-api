@@ -77,7 +77,7 @@ CREATE INDEX ON forum_users (author);
 CREATE UNLOGGED TABLE threads
 (
     author     CITEXT REFERENCES users(nickname) ON DELETE CASCADE    NOT NULL,
-    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  NOT NULL,
+    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP     NOT NULL,
     forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE      NOT NULL,
     id         SERIAL PRIMARY KEY                                     NOT NULL,
     message    TEXT                                                   NOT NULL,
@@ -96,7 +96,7 @@ CREATE INDEX ON threads (slug, id, forum_slug);
 CREATE UNLOGGED TABLE posts
 (
     author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
-    created    TIMESTAMP(3) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP    NOT NULL,
     forum_slug CITEXT REFERENCES forums (slug)    ON DELETE CASCADE  NOT NULL,
     id         SERIAL PRIMARY KEY                                    NOT NULL,
     edited     BOOL DEFAULT 'false'                                  NOT NULL,

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"forum-api/internal/domain/models"
 	"forum-api/internal/infrastructure"
 	"net/http"
@@ -51,6 +52,14 @@ func GetForumDetails(ctx *fasthttp.RequestCtx) {
 func GetUsersByForum(ctx *fasthttp.RequestCtx) {
 	params := getParams(ctx)
 	slug := ctx.UserValue("slug").(string)
+	if _, err := app.Forum.SelectForumWithCase(slug); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"pack": "http",
+			"func": "GetUsersByForum",
+		}).Error(err)
+		send(ctx, http.StatusNotFound, models.Message{Message: fmt.Sprintf("Can't find forum by slug: %v", slug)})
+		return
+	}
 
 	users, err := app.Forum.GetUsersByForum(slug, params.Desc, params.Since, params.Limit)
 	if err != nil {
@@ -59,6 +68,7 @@ func GetUsersByForum(ctx *fasthttp.RequestCtx) {
 			"func": "GetUsersByForum",
 		}).Error(err)
 		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
 	}
 	send(ctx, http.StatusOK, users)
 }
