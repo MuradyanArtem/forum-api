@@ -1,6 +1,6 @@
 # Forum API
 
-Student project on the course of the Technopark database.
+Student project on course of the Technopark database.
 
 ## Requirments
 
