@@ -1,6 +1,6 @@
 # Forum API
 
-Student project on the course of the Technopark database.
+Student project on course of the Technopark database.
 
 ## Requirments
 
@@ -15,5 +15,5 @@ cd deployments
 ```
 Up testing stand
 ```bash
-docker-compose up -d --build --rm
+docker-compose up -d --build
 ```
