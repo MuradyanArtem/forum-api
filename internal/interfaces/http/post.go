@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 
@@ -24,11 +23,6 @@ func CreatePost(ctx *fasthttp.RequestCtx) {
 	}
 
 	if err := app.Post.InsertPost(*posts, forum, id); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreatePost",
-		}).Error(err)
-
 		switch err {
 		case infrastructure.ErrConflict:
 			send(ctx, http.StatusConflict, models.Message{Message: err.Error()})
@@ -43,10 +37,6 @@ func CreatePost(ctx *fasthttp.RequestCtx) {
 func UpdatePost(ctx *fasthttp.RequestCtx) {
 	id, err := strconv.Atoi(ctx.UserValue("id").(string))
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdatePost",
-		}).Error(err)
 		setStatus(ctx, http.StatusBadRequest)
 		return
 	}
@@ -67,10 +57,6 @@ func UpdatePost(ctx *fasthttp.RequestCtx) {
 func GetPostDetails(ctx *fasthttp.RequestCtx) {
 	id, err := strconv.Atoi(ctx.UserValue("id").(string))
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetPost",
-		}).Error(err)
 		setStatus(ctx, http.StatusBadRequest)
 		return
 	}

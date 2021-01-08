@@ -19,18 +19,10 @@ func getParams(req *fasthttp.RequestCtx) *params {
 	params := &params{}
 	params.Since = string(req.FormValue("since"))
 	params.Sort = string(req.FormValue("sort"))
+	params.Limit, _ = strconv.Atoi(string(req.FormValue("limit")))
 	params.Desc = false
 	if string(req.FormValue("desc")) == "true" {
 		params.Desc = true
-	}
-
-	var err error
-	params.Limit, err = strconv.Atoi(string(req.FormValue("limit")))
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "getParams",
-		}).Errorln("Cannot get query parameter: limit", err)
 	}
 	return params
 }

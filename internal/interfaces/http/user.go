@@ -6,7 +6,6 @@ import (
 	"forum-api/internal/infrastructure"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 
@@ -23,11 +22,6 @@ func CreateUser(ctx *fasthttp.RequestCtx) {
 	}
 
 	if err := app.User.Insert(user); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "CreateUser",
-		}).Error(err)
-
 		switch err {
 		case infrastructure.ErrConflict:
 			usersAlreadyExist, err := app.User.SelectByEmailOrNickname(user.Nickname, user.Email)
@@ -58,11 +52,6 @@ func UpdateUser(ctx *fasthttp.RequestCtx) {
 	}
 
 	if err := app.User.Update(user); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "UpdateUser",
-		}).Error(err)
-
 		switch err {
 		case infrastructure.ErrConflict:
 			send(ctx, http.StatusConflict, models.Message{Message: err.Error()})
@@ -88,11 +77,6 @@ func GetUser(ctx *fasthttp.RequestCtx) {
 
 	userInDB, err := app.User.SelectByNickname(user.Nickname)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"pack": "http",
-			"func": "GetProfile",
-		}).Error(err)
-
 		if errors.Is(err, infrastructure.ErrNotExists) {
 			send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
 			return
