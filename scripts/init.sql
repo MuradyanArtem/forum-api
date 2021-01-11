@@ -60,8 +60,7 @@ CREATE UNLOGGED TABLE forums
     title    TEXT                                                             NOT NULL,
     nickname CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
     posts    INTEGER DEFAULT 0                                                NOT NULL,
-    threads  INTEGER DEFAULT 0                                                NOT NULL,
-    FOREIGN KEY (nickname) REFERENCES users (nickname)
+    threads  INTEGER DEFAULT 0                                                NOT NULL
 );
 
 CREATE INDEX ON forums (slug, title, nickname, posts, threads);
@@ -73,8 +72,6 @@ CREATE UNLOGGED TABLE forum_users
 (
     author CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
     slug   CITEXT COLLATE "C" REFERENCES forums (slug)    ON DELETE CASCADE NOT NULL,
-    FOREIGN KEY (slug)        REFERENCES forums (slug)    ON DELETE CASCADE,
-    FOREIGN KEY (author)      REFERENCES users (nickname) ON DELETE CASCADE,
     UNIQUE      (slug, author)
 );
 
@@ -91,10 +88,7 @@ CREATE UNLOGGED TABLE threads
     message    TEXT                                                               NOT NULL,
     slug       CITEXT COLLATE "C",
     title      TEXT                                                               NOT NULL,
-    votes      INTEGER DEFAULT 0                                                  NOT NULL,
-    FOREIGN KEY (forum_slug) REFERENCES forums (slug)        ON DELETE CASCADE,
-    FOREIGN KEY (author)     REFERENCES users (nickname)     ON DELETE CASCADE
-
+    votes      INTEGER DEFAULT 0                                                  NOT NULL
 );
 
 CREATE INDEX ON threads (slug, created);
@@ -113,10 +107,7 @@ CREATE UNLOGGED TABLE posts
     message    TEXT                                                              NOT NULL,
     parent     INTEGER                                                           NOT NULL,
     thread     INTEGER REFERENCES threads (id)                ON DELETE CASCADE  NOT NULL,
-    path       INTEGER ARRAY DEFAULT '{}'                                        NOT NULL,
-    FOREIGN KEY (forum_slug) REFERENCES forums (slug)         ON DELETE CASCADE,
-    FOREIGN KEY (author)     REFERENCES users (nickname)      ON DELETE CASCADE,
-    FOREIGN KEY (thread)     REFERENCES threads (id)          ON DELETE CASCADE
+    path       INTEGER ARRAY DEFAULT '{}'                                        NOT NULL
 );
 
 CREATE INDEX ON posts (id);
@@ -131,8 +122,6 @@ CREATE UNLOGGED TABLE votes
     nickname  CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
     thread_id INTEGER            REFERENCES threads (id)     ON DELETE CASCADE NOT NULL,
     vote      SMALLINT                                                         NOT NULL,
-    FOREIGN KEY (thread_id)      REFERENCES threads (id),
-    FOREIGN KEY (nickname)       REFERENCES users (nickname),
     UNIQUE      (thread_id, nickname)
 );
 
