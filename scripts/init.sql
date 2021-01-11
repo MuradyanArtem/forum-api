@@ -92,7 +92,7 @@ CREATE UNLOGGED TABLE threads
 );
 
 CREATE INDEX ON threads (slug, created);
-CREATE INDEX ON index_threads_created on threads (created);
+CREATE INDEX index_threads_created ON threads (created);
 
 CREATE INDEX ON threads using hash (slug);
 CREATE INDEX ON threads using hash (id);
