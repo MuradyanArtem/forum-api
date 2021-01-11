@@ -44,15 +44,15 @@ IF NOT EXISTS citext;
 
 CREATE UNLOGGED TABLE users
 (
-    nickname CITEXT COLLATE "C" PRIMARY KEY NOT NULL UNIQUE,
+    id       SERIAL PRIMARY KEY,
+    nickname CITEXT COLLATE "C"             NOT NULL UNIQUE,
     email    CITEXT COLLATE "C"             NOT NULL UNIQUE,
     about    TEXT                           NOT NULL,
     fullname TEXT                           NOT NULL
 );
 
-CREATE UNIQUE INDEX ON users (nickname, email);
-CREATE UNIQUE INDEX ON users (nickname, email, about, fullname);
-CREATE UNIQUE INDEX ON users (nickname DESC);
+CREATE INDEX index_users_nickname_hash ON users using hash (nickname);
+CREATE INDEX index_users_email_hash ON users using hash (email);
 
 CREATE UNLOGGED TABLE forums
 (
@@ -60,69 +60,84 @@ CREATE UNLOGGED TABLE forums
     title    TEXT                                                             NOT NULL,
     nickname CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
     posts    INTEGER DEFAULT 0                                                NOT NULL,
-    threads  INTEGER DEFAULT 0                                                NOT NULL
+    threads  INTEGER DEFAULT 0                                                NOT NULL,
+    FOREIGN KEY (nickname) REFERENCES users (nickname)
 );
+
+CREATE INDEX ON forums (slug, title, nickname, posts, threads);
+CREATE INDEX ON forums USING hash (slug);
+CREATE INDEX ON forums (nickname);
 
 
 CREATE UNLOGGED TABLE forum_users
 (
-    author CITEXT REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
-    slug   CITEXT REFERENCES forums (slug)    ON DELETE CASCADE NOT NULL,
-    PRIMARY KEY (slug, author)
+    author CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    slug   CITEXT COLLATE "C" REFERENCES forums (slug)    ON DELETE CASCADE NOT NULL,
+    FOREIGN KEY (slug)        REFERENCES forums (slug)    ON DELETE CASCADE,
+    FOREIGN KEY (author)      REFERENCES users (nickname) ON DELETE CASCADE,
+    UNIQUE      (slug, author)
 );
 
-CREATE INDEX ON forum_users (slug);
+CREATE INDEX index_forum_users ON forum_users (slug, author);
 CREATE INDEX ON forum_users (author);
+CLUSTER forum_users USING index_forum_users;
 
 CREATE UNLOGGED TABLE threads
 (
-    author     CITEXT REFERENCES users(nickname) ON DELETE CASCADE    NOT NULL,
-    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP     NOT NULL,
-    forum_slug CITEXT REFERENCES forums (slug) ON DELETE CASCADE      NOT NULL,
-    id         SERIAL PRIMARY KEY                                     NOT NULL,
-    message    TEXT                                                   NOT NULL,
-    slug       CITEXT,
-    title      TEXT                                                   NOT NULL,
-    votes      INTEGER                     DEFAULT 0                  NOT NULL
+    author     CITEXT COLLATE "C" REFERENCES users(nickname) ON DELETE CASCADE    NOT NULL,
+    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP                 NOT NULL,
+    forum_slug CITEXT COLLATE "C" REFERENCES forums (slug)   ON DELETE CASCADE    NOT NULL,
+    id         SERIAL PRIMARY KEY                                                 NOT NULL,
+    message    TEXT                                                               NOT NULL,
+    slug       CITEXT COLLATE "C",
+    title      TEXT                                                               NOT NULL,
+    votes      INTEGER DEFAULT 0                                                  NOT NULL,
+    FOREIGN KEY (forum_slug) REFERENCES forums (slug)        ON DELETE CASCADE,
+    FOREIGN KEY (author)     REFERENCES users (nickname)     ON DELETE CASCADE
+
 );
 
-CREATE INDEX ON threads (slug, author);
-CREATE INDEX ON threads (forum_slug, created ASC);
-CREATE INDEX ON threads (forum_slug, created DESC);
-CREATE INDEX ON threads (slug, id);
-CREATE INDEX ON threads (id, forum_slug);
-CREATE INDEX ON threads (slug, id, forum_slug);
+CREATE INDEX ON threads (slug, created);
+CREATE INDEX ON index_threads_created on threads (created);
+
+CREATE INDEX ON threads using hash (slug);
+CREATE INDEX ON threads using hash (id);
 
 CREATE UNLOGGED TABLE posts
 (
-    author     CITEXT REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
-    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP    NOT NULL,
-    forum_slug CITEXT REFERENCES forums (slug)    ON DELETE CASCADE  NOT NULL,
-    id         SERIAL PRIMARY KEY                                    NOT NULL,
-    edited     BOOL DEFAULT 'false'                                  NOT NULL,
-    message    TEXT                                                  NOT NULL,
-    parent     INTEGER                                               NOT NULL,
-    thread     INTEGER REFERENCES threads (id) ON DELETE CASCADE     NOT NULL,
-    path       INTEGER ARRAY DEFAULT '{}'                            NOT NULL
+    author     CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE  NOT NULL,
+    created    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP                NOT NULL,
+    forum_slug CITEXT COLLATE "C" REFERENCES forums (slug)    ON DELETE CASCADE  NOT NULL,
+    id         SERIAL PRIMARY KEY                                                NOT NULL,
+    edited     BOOL DEFAULT 'false'                                              NOT NULL,
+    message    TEXT                                                              NOT NULL,
+    parent     INTEGER                                                           NOT NULL,
+    thread     INTEGER REFERENCES threads (id)                ON DELETE CASCADE  NOT NULL,
+    path       INTEGER ARRAY DEFAULT '{}'                                        NOT NULL,
+    FOREIGN KEY (forum_slug) REFERENCES forums (slug)         ON DELETE CASCADE,
+    FOREIGN KEY (author)     REFERENCES users (nickname)      ON DELETE CASCADE,
+    FOREIGN KEY (thread)     REFERENCES threads (id)          ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX ON posts (id, thread);
-CREATE UNIQUE INDEX ON posts (id, author);
-CREATE        INDEX ON posts (thread, path DESC);
-CREATE        INDEX ON posts (thread, path ASC);
-CREATE        INDEX ON posts (thread, id DESC);
-CREATE        INDEX ON posts (thread, id ASC);
+CREATE INDEX ON posts (id);
+CREATE INDEX ON posts (thread, created, id);
+CREATE INDEX ON posts (thread, id);
+CREATE INDEX ON posts (thread, path);
+CREATE INDEX ON posts (thread, parent, path);
+CREATE INDEX ON posts ((path[1]), path);
 
 CREATE UNLOGGED TABLE votes
 (
-    nickname  CITEXT  REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
-    thread_id INTEGER REFERENCES threads (id)     ON DELETE CASCADE NOT NULL,
-    vote      SMALLINT NOT NULL,
-    PRIMARY KEY (thread_id, nickname)
+    nickname  CITEXT COLLATE "C" REFERENCES users (nickname) ON DELETE CASCADE NOT NULL,
+    thread_id INTEGER            REFERENCES threads (id)     ON DELETE CASCADE NOT NULL,
+    vote      SMALLINT                                                         NOT NULL,
+    FOREIGN KEY (thread_id)      REFERENCES threads (id),
+    FOREIGN KEY (nickname)       REFERENCES users (nickname),
+    UNIQUE      (thread_id, nickname)
 );
 
 CREATE UNIQUE INDEX ON votes (thread_id, nickname);
-CREATE        INDEX ON threads (slug, id);
+
 
 -- PATH TO POST UPDATE
 CREATE FUNCTION update_path() RETURNS TRIGGER AS

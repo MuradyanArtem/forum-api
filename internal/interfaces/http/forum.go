@@ -15,13 +15,22 @@ func CreateForum(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	var err error
+	forum.User, err = app.User.SelectNicknameWithCase(forum.User)
+	if err != nil {
+		send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+		return
+	}
+
 	if err := app.Forum.Create(forum); err != nil {
 		switch err {
 		case infrastructure.ErrNotExists:
 			send(ctx, http.StatusNotFound, models.Message{Message: err.Error()})
+
 		case infrastructure.ErrConflict:
 			forumInBase, _ := app.Forum.SelectBySlug(forum.Slug)
 			send(ctx, http.StatusConflict, forumInBase)
+
 		default:
 			send(ctx, http.StatusInternalServerError, models.Message{Message: err.Error()})
 		}

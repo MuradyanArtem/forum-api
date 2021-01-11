@@ -59,8 +59,11 @@ func (u *User) Update(user *models.User) error {
 
 func (u *User) SelectByNickname(nickname string) (models.User, error) {
 	user := models.User{}
-	err := u.db.QueryRow("SELECT * FROM users "+
-		"WHERE nickname = $1 ", nickname).Scan(&user.Nickname, &user.Email, &user.About, &user.Fullname)
+	err := u.db.QueryRow(
+		"SELECT users.email, users.nickname, users.about, users.fullname "+
+			"FROM users "+
+			"WHERE nickname = $1",
+		nickname).Scan(&user.Email, &user.Nickname, &user.About, &user.Fullname)
 	switch err {
 	case pgx.ErrNoRows:
 		return models.User{}, infrastructure.ErrNotExists
@@ -70,15 +73,19 @@ func (u *User) SelectByNickname(nickname string) (models.User, error) {
 }
 
 func (u *User) SelectByEmailOrNickname(nickname string, email string) (models.UserSlice, error) {
-	users := []models.User{}
-	rows, err := u.db.Query("SELECT * FROM users "+
-		"WHERE nickname = $1 OR email = $2 LIMIT 2", nickname, email)
+	rows, err := u.db.Query(
+		"SELECT users.email, users.nickname, users.about, users.fullname "+
+			"FROM users "+
+			"WHERE nickname = $1 OR email = $2",
+		nickname, email)
 	if err != nil {
 		return nil, err
 	}
+
+	users := []models.User{}
 	for rows.Next() {
 		user := models.User{}
-		rows.Scan(&user.Nickname, &user.Email, &user.About, &user.Fullname)
+		rows.Scan(&user.Email, &user.Nickname, &user.About, &user.Fullname)
 		users = append(users, user)
 	}
 	return users, nil
@@ -87,7 +94,7 @@ func (u *User) SelectByEmailOrNickname(nickname string, email string) (models.Us
 func (u *User) SelectNicknameWithCase(nickname string) (string, error) {
 	var result string
 	err := u.db.QueryRow("SELECT nickname FROM users "+
-		"WHERE nickname = $1 ", nickname).
+		"WHERE nickname = $1", nickname).
 		Scan(&result)
 
 	switch err {

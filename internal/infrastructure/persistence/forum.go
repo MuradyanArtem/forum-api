@@ -17,7 +17,7 @@ func newForum(db *pgx.ConnPool) *Forum {
 
 func (f *Forum) Insert(forum *models.Forum) error {
 	if err := f.db.QueryRow("INSERT INTO forums (slug, title, nickname) " +
-		"VALUES ($1, $2, (select nickname from users where nickname = $3)) "+
+		"VALUES ($1, $2, $3) "+
 		"RETURNING nickname", &forum.Slug, &forum.Title, &forum.User).Scan(&forum.User); err != nil {
 		switch infrastructure.ErrCode(err) {
 		case infrastructure.PgErrUniqueViolation:
@@ -31,9 +31,9 @@ func (f *Forum) Insert(forum *models.Forum) error {
 
 func (f *Forum) SelectBySlug(slug string) (*models.Forum, error) {
 	forum := &models.Forum{}
-	if err := f.db.QueryRow("SELECT forums.* "+
-		"FROM forums "+
-		"WHERE slug = $1 ", slug).Scan(&forum.Slug, &forum.Title, &forum.User, &forum.Posts, &forum.Threads); err != nil {
+	if err := f.db.QueryRow("SELECT forums.title, forums.nickname, forums.slug, forums.posts, forums.threads "+
+	"FROM forums "+
+	"WHERE slug = $1 ", slug).Scan(&forum.Title, &forum.User, &forum.Slug, &forum.Posts, &forum.Threads); err != nil {
 		return nil, err
 	}
 	return forum, nil
